@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # Apps Script URL
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"  # v5
 API_TOKEN = "youareplan"
 
 # 번역 차단 CSS
@@ -71,10 +71,6 @@ POLICY_EXPERIENCES = [
 ]
 
 def main():
-<<<<<<< HEAD
-    st.title("🎯 유아플랜 정책자금 매칭 시스템")
-    st.subheader("전문가 무료 상담을 통한 맞춤형 정책자금 안내")
-=======
     st.title("🎯 유아플랜 컨설팅 정책자금 매칭 시스템")
     st.subheader("내 사업에 꼭 맞는 정책자금, 전문가가 1:1로 안내해드립니다")
 
@@ -85,15 +81,10 @@ def main():
         자동 번역 시 입력값이 변형될 수 있습니다.
         """
     )
->>>>>>> 0de4fdd (update: copy text, expander, notice, sidebar tweaks)
     
     # 사이드바
     with st.sidebar:
         st.markdown("### 💡 서비스 소개")
-<<<<<<< HEAD
-        st.success("✅ 18개 기관 정책자금 데이터 기반")
-=======
->>>>>>> 0de4fdd (update: copy text, expander, notice, sidebar tweaks)
         st.success("✅ 전문가 무료 상담")
         st.success("✅ 맞춤형 매칭 서비스")
         
@@ -131,24 +122,14 @@ def main():
         policy_experience = st.multiselect(
             "해당사항을 모두 선택하세요",
             POLICY_EXPERIENCES,
-<<<<<<< HEAD
-            help="기존 경험이 있으시면 더 정확한 상담이 가능합니다"
-=======
             help="기존 경험이 있으시면 더 정확한 상담이 가능합니다",
             placeholder="선택하세요"
->>>>>>> 0de4fdd (update: copy text, expander, notice, sidebar tweaks)
         )
         
         # 개인정보 동의
         st.markdown("---")
         col_agree1, col_agree2 = st.columns(2)
         with col_agree1:
-<<<<<<< HEAD
-            privacy_agree = st.checkbox("개인정보 수집·이용 동의 (필수)")
-        with col_agree2:
-            marketing_agree = st.checkbox("마케팅 정보 수신 동의 (선택)")
-        
-=======
             privacy_agree = st.checkbox("개인정보 수집·이용 동의 (필수)", help="필수 동의 항목입니다. 전문은 아래에서 확인하세요.")
             with st.expander("개인정보 수집·이용 동의 전문 보기"):
                 st.markdown(
@@ -181,7 +162,6 @@ def main():
                     """
                 )
 
->>>>>>> 0de4fdd (update: copy text, expander, notice, sidebar tweaks)
         # 제출
         submitted = st.form_submit_button("🎯 전문가 상담 신청하기", type="primary")
         
