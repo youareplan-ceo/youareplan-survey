@@ -8,7 +8,7 @@ RELEASE_VERSION = "v5"
 
 # 페이지 설정
 st.set_page_config(
-    page_title="유아플랜 정책자금 매칭",
+    page_title="소상공인 정책자금 상담 신청",
     page_icon="💰",
     layout="wide"
 )
@@ -20,10 +20,82 @@ API_TOKEN = "youareplan"
 # 번역 차단 CSS
 st.markdown("""
 <style>
+  /* 폰트: 공공기관 느낌 (Noto Sans KR) */
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  html, body, [class*="css"]  {
+    font-family: 'Noto Sans KR', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Apple SD Gothic Neo', 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif;
+  }
+
+  /* 기본 색상 변수 */
+  :root {
+    --gov-navy:#002855;      /* 진청(헤더/타이틀) */
+    --gov-blue:#005BAC;      /* 포인트(버튼/링크) */
+    --gov-gray:#f5f7fa;      /* 배경 */
+    --gov-border:#e1e5eb;    /* 경계선 */
+    --gov-danger:#D32F2F;    /* 경고/필수표시 */
+  }
+
+  /* 번역 차단 유지 */
   .notranslate,[translate="no"]{ translate: no !important; }
   .stApp * { translate: no !important; }
+
+  /* 사이드바 모바일에서 숨김(기존 정책 유지) */
   @media (max-width: 768px) {
     [data-testid="stSidebar"] { display: none !important; }
+  }
+
+  /* 상단 관공서 느낌 헤더 */
+  .gov-topbar{
+    width:100%;
+    background:var(--gov-navy);
+    color:#fff;
+    font-size:13px;
+    padding:8px 14px;
+    letter-spacing:0.2px;
+    border-bottom:3px solid var(--gov-blue);
+  }
+  .gov-hero{
+    padding:16px 0 8px 0;
+    border-bottom:1px solid var(--gov-border);
+    margin-bottom:8px;
+  }
+  .gov-hero h2{
+    color:var(--gov-navy);
+    margin:0 0 6px 0;
+    font-weight:700;
+  }
+  .gov-hero p{
+    color:#4b5563;
+    margin:0;
+  }
+
+  /* 버튼(제출) 관공서 파랑 */
+  .stButton > button{
+    background:var(--gov-blue) !important;
+    color:#fff !important;
+    border:1px solid var(--gov-blue) !important;
+    font-weight:600;
+    padding:10px 16px;
+    border-radius:6px;
+  }
+  .stButton > button:hover{
+    filter:brightness(0.95);
+  }
+
+  /* 인풋/셀렉트 테두리 */
+  .stTextInput > div > div > input,
+  .stSelectbox > div > div,
+  .stMultiSelect > div > div,
+  .stTextArea > div > div > textarea{
+    border:1px solid var(--gov-border) !important;
+    border-radius:6px !important;
+  }
+
+  /* 필수표시(빨간점) 유틸: 레이블 뒤에 붙여 사용할 수 있도록 클래스 제공 */
+  .req::after{
+    content:" *";
+    color:var(--gov-danger);
+    font-weight:700;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -75,16 +147,17 @@ POLICY_EXPERIENCES = [
 ]
 
 def main():
-    st.title("🎯 3분 입력 → 내게 맞는 정책자금을 바로 안내")
-    st.subheader("업력·업종·지역 기준 맞춤 매칭, 1영업일 내 1:1 상담 연결")
+    st.markdown("""
+<div class="gov-topbar">대한민국 정부 협력 서비스</div>
+<div class="gov-hero">
+  <h2>소상공인 정책자금 상담 신청</h2>
+  <p>중소벤처기업부 · 소상공인시장진흥공단 협력 민간 상담 지원</p>
+</div>
+""", unsafe_allow_html=True)
+    st.markdown("##### 기초 상담을 위해 아래 항목을 정확히 입력해 주세요.")
 
     # 안내문: 자동 번역 끄기 안내
-    st.warning(
-        """
-        🔔 **안내**: 브라우저의 자동 번역 기능(Chrome 번역 등)을 **끄고** 작성해주세요.\
-        자동 번역 시 입력값이 변형될 수 있습니다.
-        """
-    )
+    st.info("✔ 본 설문은 정책자금 지원 가능성 검토를 위한 **기초 상담 절차**입니다. 입력된 정보는 관련 법령에 따라 안전하게 관리됩니다. (자동 번역 기능은 끄고 작성해 주세요)")
     
     st.markdown(
         """
@@ -179,7 +252,7 @@ def main():
                 )
 
         # 제출
-        submitted = st.form_submit_button("🎯 무료 1:1 상담 받기", type="primary")
+        submitted = st.form_submit_button("📩 정책자금 상담 신청", type="primary")
         
         if submitted:
             # 연락처 정규화/검증
@@ -239,7 +312,7 @@ def main():
                     if save_to_google_sheet(survey_data):
                         st.success("✅ 상담 신청이 완료되었습니다!")
                         st.info("📞 1영업일 내 전문가가 연락드립니다. 급한 문의는 카카오 채널 ‘유아플랜 컨설팅’으로 남겨주세요.")
-                        st.balloons()
+                        st.toast("신청이 접수되었습니다.", icon="✅")
                     else:
                         st.error("❌ 신청 중 오류가 발생했습니다. 다시 시도해주세요.")
 
