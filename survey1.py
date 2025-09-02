@@ -331,6 +331,43 @@ def main():
             help="기존 경험이 있으시면 더 정확한 상담이 가능합니다",
             placeholder="선택하세요"
         )
+
+        # ===== 지원 자격 확인 =====
+        st.markdown("#### 🚨 지원 자격 확인 (필수)")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            tax_status = st.selectbox(
+                "세금 체납 여부",
+                ["체납 없음", "체납 있음", "분납 중"],
+                help="국세/지방세 체납 시 대부분 지원 제한. 분납/완납 계획 전환으로 해결 가능"
+            )
+        with col_b:
+            credit_status = st.selectbox(
+                "금융 연체 여부",
+                ["연체 없음", "30일 미만", "30일 이상"],
+                help="단기 연체는 해제 후 신청 가능. 장기 연체는 제한적"
+            )
+
+        business_status = st.selectbox(
+            "사업 영위 상태",
+            ["정상 영업", "휴업", "폐업 예정"],
+            help="휴업은 재개업 신고 후 가능, 폐업 ‘이전’까진 일부 가능"
+        )
+
+        # 화면 경고(차단 아님)
+        risk_msgs = []
+        if tax_status != "체납 없음":
+            risk_msgs.append("체납")
+        if credit_status != "연체 없음":
+            risk_msgs.append("연체")
+        if business_status != "정상 영업":
+            risk_msgs.append("휴/폐업")
+        if risk_msgs:
+            st.warning(
+                "현재 상태로는 제한이 있을 수 있어요. 다만 상담을 통해 해결 방안을 함께 찾아드리겠습니다. "
+                f"(표시: {', '.join(risk_msgs)})"
+            )
         
         # 개인정보 동의
         st.markdown("---")
@@ -423,6 +460,9 @@ def main():
                         'revenue': revenue,
                         'funding_amount': funding_amount,
                         'policy_experience': ', '.join(policy_experience) if policy_experience else '경험 없음',
+                        'tax_status': tax_status,
+                        'credit_status': credit_status,
+                        'business_status': business_status,
                         'privacy_agree': privacy_agree,
                         'marketing_agree': marketing_agree,
                         'utm_source': utm_source,
