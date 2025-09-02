@@ -92,6 +92,19 @@ st.markdown("""
     box-shadow: 0 0 0 1000px #ffffff inset !important; /* 일부 브라우저에서 배경 누락 방지 */
   }
 
+  /* 입력 placeholder 컬러 가독성 향상 */
+  ::placeholder { color:#9aa0a6 !important; opacity:1 !important; }
+  input::placeholder, textarea::placeholder { color:#9aa0a6 !important; }
+
+  /* iOS/Chrome 자동완성(노란 배경) 덮어쓰기 */
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color:#111111 !important;
+    box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+  }
+
   /* 입력창 컨테이너에 연한 배경/테두리 */
   .stTextInput > div > div,
   .stSelectbox > div,
@@ -100,6 +113,7 @@ st.markdown("""
     background:#ffffff !important;
     border:1px solid var(--gov-border) !important;
     border-radius:6px !important;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04) !important;
   }
 
   /* 체크박스 컨테이너(동의 영역) 테두리 강조 */
