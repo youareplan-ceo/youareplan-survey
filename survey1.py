@@ -8,7 +8,7 @@ import random
 RELEASE_VERSION = "v6"
 
 # Apps Script URL
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"  # v5
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"  # current exec URL
 API_TOKEN = "youareplan"
 
 # KakaoTalk Channel (real public ID)
@@ -301,8 +301,8 @@ def main():
             st.session_state.submitted = False
 
         # 상단: 이름/연락처 (모바일에서도 바로 이어서 보이도록 순서 고정)
-        name = st.text_input("👤 성함 (필수)", placeholder="홍길동")
-        phone = st.text_input("📞 연락처 (필수)", placeholder="010-0000-0000")
+        name = (st.text_input("👤 성함 (필수)", placeholder="홍길동") or "").strip()
+        phone = (st.text_input("📞 연락처 (필수)", placeholder="010-0000-0000") or "").strip()
         phone_error_placeholder = st.empty()
 
         # 나머지 필드들은 2열 구성
@@ -385,8 +385,8 @@ def main():
             else:
                 phone_error_placeholder.empty()
 
-            if not name or not formatted_phone:
-                st.error("성함과 연락처는 필수 입력 항목입니다.")
+            if not name or len(name) < 2 or not formatted_phone:
+                st.error("성함(2자 이상)과 연락처는 필수 입력 항목입니다.")
                 st.session_state.submitted = False
             elif not phone_valid:
                 st.error("연락처 형식을 확인해주세요. 예: 010-1234-5678")
