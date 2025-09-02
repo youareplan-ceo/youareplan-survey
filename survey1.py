@@ -97,6 +97,39 @@ st.markdown("""
     color:var(--gov-danger);
     font-weight:700;
   }
+
+  /* ===== 라이트 모드 강제 적용 (디바이스 다크 모드 무시) ===== */
+  :root { color-scheme: light; }
+  html, body, .stApp {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  /* 사이드바/컨테이너도 라이트 고정 */
+  [data-testid="stSidebar"] {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  /* 텍스트/헤딩 가독성 강화 */
+  .stMarkdown, .stText, label, p,
+  h1, h2, h3, h4, h5, h6 {
+    color: #111111 !important;
+  }
+  /* 입력 요소 라이트 고정 */
+  .stTextInput input,
+  .stSelectbox div[data-baseweb="select"] > div,
+  .stMultiSelect div[data-baseweb="select"] > div,
+  .stTextArea textarea {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border-color: var(--gov-border) !important;
+  }
+  /* 링크 색상은 정부 포인트 블루 유지 */
+  a { color: var(--gov-blue) !important; }
+  /* 다크 테마 강제 무시 (일부 테마 변수에 영향) */
+  [data-theme="dark"] * {
+    --text-color: #111111 !important;
+    --background-color: #ffffff !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
