@@ -1,9 +1,26 @@
+
 import streamlit as st
 import requests
 import json
 from datetime import datetime
 import re
 import random
+
+# ---- 전화번호 포맷 유틸 ----
+def _digits_only(s: str) -> str:
+    return re.sub(r"[^0-9]", "", s or "")
+
+def format_phone_from_digits(d: str) -> str:
+    """11자리(010xxxxxxxx)면 자동으로 010-0000-0000 형태로 변환"""
+    if len(d) == 11 and d.startswith("010"):
+        return f"{d[0:3]}-{d[3:7]}-{d[7:11]}"
+    return d
+
+def _phone_on_change():
+    # 사용자가 타이핑할 때 숫자만 남겨 하이픈 자동 삽입
+    raw = st.session_state.get("phone_input", "")
+    d = _digits_only(raw)
+    st.session_state.phone_input = format_phone_from_digits(d)
 
 RELEASE_VERSION = "v6"
 
@@ -163,6 +180,27 @@ st.markdown("""
     --text-color: #111111 !important;
     --background-color: #ffffff !important;
   }
+
+  /* ===== CTA 버튼(채팅/채널추가) 정리 ===== */
+  .cta-wrap{margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fafafa}
+  .cta-btn{display:block;text-align:center;font-weight:700;text-decoration:none;padding:12px 16px;border-radius:10px}
+  .cta-primary{background:#FEE500;color:#3C1E1E}
+  .cta-secondary{background:#fff;color:#005BAC;border:1px solid #005BAC}
+  .cta-gap{height:8px}
+
+  /* 연락처 자동 포맷 안내 텍스트 여백 정리 */
+  .phone-help{margin-top:4px;color:#6b7280;font-size:12px}
+  /* === 모바일 드롭다운/키보드 충돌 완화 === */
+  @media (max-width: 768px){
+    /* iOS 하단 키보드가 셀렉트 리스트를 가리는 현상 방지 */
+    .stApp{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 220px) !important}
+    /* BaseWeb popover 높이 제한 + 스크롤 가능 + 항상 위에 표시 */
+    div[data-baseweb="popover"]{z-index:10000 !important}
+    div[data-baseweb="popover"] div[role="listbox"]{
+      max-height:38vh !important;
+      overscroll-behavior:contain;
+    }
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -255,6 +293,14 @@ POLICY_EXPERIENCES = [
     "경험 없음"
 ]
 
+# 안내용: 정책자금 지원이 어려운 업종(멘트만, 차단은 하지 않음)
+DISALLOWED_INDUSTRIES = [
+    "사행성/유흥/불건전 업종 (주점, 도박, 성인용품 등)",
+    "부동산 임대 및 개발 관련 업종",
+    "금융 및 보험업",
+    "법무, 회계, 세무 등 전문 서비스업",
+]
+
 def main():
     st.markdown("""
 <div class="gov-topbar">대한민국 정부 협력 서비스</div>
@@ -298,22 +344,35 @@ def main():
     # 설문지
     st.markdown("### 📝 1차 설문 - 기본 정보")
     st.write("3분이면 끝! 잘못 입력해도 상담 시 바로잡아 드립니다.")
+
+    # ===== 상단 기본 정보: 이름/연락처 (실시간 하이픈) =====
+    name = (st.text_input("👤 성함 (필수)", placeholder="홍길동", key="name_input") or "").strip()
+
+    # 연락처는 폼 밖에서 on_change로 실시간 하이픈 적용
+    st.session_state.setdefault("phone_input", "")
+    st.text_input(
+        "📞 연락처 (필수)",
+        key="phone_input",
+        placeholder="010-0000-0000",
+        on_change=_phone_on_change,
+    )
+    phone_error_placeholder = st.empty()
+    st.caption("숫자만 입력해 주세요. 제출 시 '010-0000-0000' 형식으로 자동 정리됩니다.")
     
     with st.form("first_survey"):
         # 중복 제출 방지 플래그 초기화
         if 'submitted' not in st.session_state:
             st.session_state.submitted = False
 
-        # 상단: 이름/연락처 (모바일에서도 바로 이어서 보이도록 순서 고정)
-        name = (st.text_input("👤 성함 (필수)", placeholder="홍길동") or "").strip()
-        phone = (st.text_input("📞 연락처 (필수)", placeholder="010-0000-0000") or "").strip()
-        phone_error_placeholder = st.empty()
-
         # 나머지 필드들은 2열 구성
         col1, col2 = st.columns(2)
         with col1:
             region = st.selectbox("🏢 사업장 지역 (필수)", REGIONS)
             industry = st.selectbox("🏭 업종 (필수)", INDUSTRIES)
+            # 업종 제한 안내(멘트만, 제출은 차단하지 않음)
+            st.caption("※ 일부 업종은 정책자금 지원이 제한될 수 있어요. 아래 안내를 참고해 주세요.")
+            with st.expander("지원이 어려운 업종 안내"):
+                st.markdown("\n".join([f"- {item}" for item in DISALLOWED_INDUSTRIES]))
             business_type = st.selectbox("📋 사업자 형태 (필수)", BUSINESS_TYPES)
         with col2:
             employee_count = st.selectbox("👥 직원 수 (필수)", EMPLOYEE_COUNTS)
@@ -413,14 +472,10 @@ def main():
         if submitted and not st.session_state.submitted:
             st.session_state.submitted = True
 
-            # 연락처 정규화/검증
-            raw_phone = phone
-            digits = re.sub(r"[^0-9]", "", raw_phone or "")
-            formatted_phone = raw_phone
-            if len(digits) == 11 and digits.startswith("010"):
-                formatted_phone = f"{digits[0:3]}-{digits[3:7]}-{digits[7:11]}"
-            # 기본 패턴: 010-0000-0000
-            phone_valid = bool(re.match(r"^010-\d{4}-\d{4}$", formatted_phone or ""))
+            # 폼 밖에서 입력된 전화번호 사용
+            d = _digits_only(st.session_state.get("phone_input", ""))
+            formatted_phone = format_phone_from_digits(d)
+            phone_valid = (len(d) == 11 and d.startswith("010"))
             if not phone_valid:
                 phone_error_placeholder.error("연락처는 010-0000-0000 형식으로 입력해주세요.")
             else:
@@ -489,19 +544,14 @@ def main():
                         # 다음 행동 유도(CTA): 카카오 채널 채팅 / 채널 추가
                         st.markdown(
                             f"""
-                            <div style="margin-top:10px; padding:12px; border:1px solid var(--gov-border); border-radius:8px; background:#fafafa;">
-                              <div style="margin-bottom:10px; color:#333;">바로 궁금하신 점이 있으시면 지금 상담사와 대화하실 수 있어요.</div>
-                              <a href="{KAKAO_CHAT_URL}" target="_blank"
-                                 style="background:#FEE500; color:#3C1E1E; padding:10px 16px; text-decoration:none; border-radius:8px; display:inline-block; font-weight:700; margin-right:8px;">
-                                 💬 지금 바로 전문가에게 물어보기
-                              </a>
-                              <a href="{KAKAO_CHANNEL_URL}" target="_blank"
-                                 style="background:#fff; color:#005BAC; padding:10px 16px; text-decoration:none; border:1px solid #005BAC; border-radius:8px; display:inline-block; font-weight:700;">
-                                 ➕ 채널 추가하고 소식 받기
-                              </a>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
+      <div class=\"cta-wrap\">
+        <div style=\"margin-bottom:8px;color:#333;\">바로 궁금하신 점이 있으시면 지금 상담사와 대화하실 수 있어요.</div>
+        <a class=\"cta-btn cta-primary\" href=\"{KAKAO_CHAT_URL}\" target=\"_blank\">💬 지금 바로 전문가에게 물어보기</a>
+        <div class=\"cta-gap\"></div>
+        <a class=\"cta-btn cta-secondary\" href=\"{KAKAO_CHANNEL_URL}\" target=\"_blank\">➕ 채널 추가하고 소식 받기</a>
+      </div>
+      """,
+                            unsafe_allow_html=True,
                         )
                     else:
                         msg = result.get('message', '알 수 없는 오류로 실패했습니다. 잠시 후 다시 시도해주세요.')
