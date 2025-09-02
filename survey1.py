@@ -7,16 +7,14 @@ import random
 
 RELEASE_VERSION = "v6"
 
-# 페이지 설정
-st.set_page_config(
-    page_title="소상공인 정책자금 상담 신청",
-    page_icon="💰",
-    layout="wide"
-)
-
 # Apps Script URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"  # v5
 API_TOKEN = "youareplan"
+
+# KakaoTalk Channel (real public ID)
+KAKAO_CHANNEL_ID = "_LWxexmn"
+KAKAO_CHANNEL_URL = f"https://pf.kakao.com/{KAKAO_CHANNEL_ID}"
+KAKAO_CHAT_URL = f"{KAKAO_CHANNEL_URL}/chat"
 
 # 번역 차단 CSS
 st.markdown("""
@@ -83,13 +81,33 @@ st.markdown("""
     filter:brightness(0.95);
   }
 
-  /* 인풋/셀렉트 테두리 */
+  /* 인풋/셀렉트 테두리 및 배경 명확화 */
   .stTextInput > div > div > input,
   .stSelectbox > div > div,
   .stMultiSelect > div > div,
   .stTextArea > div > div > textarea{
     border:1px solid var(--gov-border) !important;
     border-radius:6px !important;
+    background:#ffffff !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important; /* 일부 브라우저에서 배경 누락 방지 */
+  }
+
+  /* 입력창 컨테이너에 연한 배경/테두리 */
+  .stTextInput > div > div,
+  .stSelectbox > div,
+  .stMultiSelect > div,
+  .stTextArea > div {
+    background:#ffffff !important;
+    border:1px solid var(--gov-border) !important;
+    border-radius:6px !important;
+  }
+
+  /* 체크박스 컨테이너(동의 영역) 테두리 강조 */
+  .stCheckbox {
+    padding:12px 14px !important;
+    border:1px solid var(--gov-border) !important;
+    border-radius:8px !important;
+    background:#ffffff !important;
   }
 
   /* 필수표시(빨간점) 유틸: 레이블 뒤에 붙여 사용할 수 있도록 클래스 제공 */
@@ -227,7 +245,7 @@ def main():
     st.markdown("""
 <div class="gov-topbar">대한민국 정부 협력 서비스</div>
 <div class="gov-hero">
-  <h2>소상공인 정책자금 상담 신청</h2>
+  <h2>정부 지원금·정책자금 상담 신청</h2>
   <p>중소벤처기업부 · 소상공인시장진흥공단 협력 민간 상담 지원</p>
 </div>
 """, unsafe_allow_html=True)
@@ -255,6 +273,16 @@ def main():
         st.markdown("### 💡 서비스 소개")
         st.success("✅ 전문가 무료 상담")
         st.success("✅ 맞춤형 매칭 서비스")
+        # Kakao Channel quick links
+        st.markdown(
+            f"""
+            <div style="margin-top:6px;">
+              <a href="{KAKAO_CHAT_URL}" target="_blank" style="background:#FEE500; color:#3C1E1E; padding:8px 12px; text-decoration:none; border-radius:6px; display:inline-block; font-weight:600; margin-right:6px;">💬 채팅 상담</a>
+              <a href="{KAKAO_CHANNEL_URL}" target="_blank" style="background:#fff; color:#005BAC; padding:8px 12px; text-decoration:none; border:1px solid #005BAC; border-radius:6px; display:inline-block; font-weight:600;">➕ 채널 추가</a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         
         st.markdown("---")
         st.markdown("### 📞 상담 프로세스")
@@ -272,21 +300,22 @@ def main():
         if 'submitted' not in st.session_state:
             st.session_state.submitted = False
 
+        # 상단: 이름/연락처 (모바일에서도 바로 이어서 보이도록 순서 고정)
+        name = st.text_input("👤 성함 (필수)", placeholder="홍길동")
+        phone = st.text_input("📞 연락처 (필수)", placeholder="010-0000-0000")
+        phone_error_placeholder = st.empty()
+
+        # 나머지 필드들은 2열 구성
         col1, col2 = st.columns(2)
-        
         with col1:
-            name = st.text_input("👤 성함 (필수)", placeholder="홍길동")
             region = st.selectbox("🏢 사업장 지역 (필수)", REGIONS)
             industry = st.selectbox("🏭 업종 (필수)", INDUSTRIES)
             business_type = st.selectbox("📋 사업자 형태 (필수)", BUSINESS_TYPES)
-        
         with col2:
-            phone = st.text_input("📞 연락처 (필수)", placeholder="010-0000-0000")
-            phone_error_placeholder = st.empty()
             employee_count = st.selectbox("👥 직원 수 (필수)", EMPLOYEE_COUNTS)
             revenue = st.selectbox("💰 연간 매출 (필수)", REVENUES)
             funding_amount = st.selectbox("💵 필요 자금 (필수)", FUNDING_AMOUNTS)
-        
+
         email = st.text_input("📧 이메일 (선택)", placeholder="email@example.com")
         
         # 정책자금 경험
@@ -413,6 +442,23 @@ def main():
                         st.info(f"📋 접수번호: **{receipt_no}**")
                         st.info("📞 1영업일 내 전문가가 연락드립니다. 급한 문의는 카카오 채널 ‘유아플랜 컨설팅’으로 남겨주세요.")
                         st.toast("신청이 접수되었습니다.", icon="✅")
+                        # 다음 행동 유도(CTA): 카카오 채널 채팅 / 채널 추가
+                        st.markdown(
+                            f"""
+                            <div style="margin-top:10px; padding:12px; border:1px solid var(--gov-border); border-radius:8px; background:#fafafa;">
+                              <div style="margin-bottom:10px; color:#333;">바로 궁금하신 점이 있으시면 지금 상담사와 대화하실 수 있어요.</div>
+                              <a href="{KAKAO_CHAT_URL}" target="_blank"
+                                 style="background:#FEE500; color:#3C1E1E; padding:10px 16px; text-decoration:none; border-radius:8px; display:inline-block; font-weight:700; margin-right:8px;">
+                                 💬 지금 바로 전문가에게 물어보기
+                              </a>
+                              <a href="{KAKAO_CHANNEL_URL}" target="_blank"
+                                 style="background:#fff; color:#005BAC; padding:10px 16px; text-decoration:none; border:1px solid #005BAC; border-radius:8px; display:inline-block; font-weight:700;">
+                                 ➕ 채널 추가하고 소식 받기
+                              </a>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
                     else:
                         msg = result.get('message', '알 수 없는 오류로 실패했습니다. 잠시 후 다시 시도해주세요.')
                         st.error(f"❌ 신청 중 오류: {msg}")
