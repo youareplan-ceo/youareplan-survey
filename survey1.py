@@ -287,16 +287,6 @@ def main():
         st.markdown("### 💡 서비스 소개")
         st.success("✅ 전문가 무료 상담")
         st.success("✅ 맞춤형 매칭 서비스")
-        # Kakao Channel quick links
-        st.markdown(
-            f"""
-            <div style="margin-top:6px;">
-              <a href="{KAKAO_CHAT_URL}" target="_blank" style="background:#FEE500; color:#3C1E1E; padding:8px 12px; text-decoration:none; border-radius:6px; display:inline-block; font-weight:600; margin-right:6px;">💬 채팅 상담</a>
-              <a href="{KAKAO_CHANNEL_URL}" target="_blank" style="background:#fff; color:#005BAC; padding:8px 12px; text-decoration:none; border:1px solid #005BAC; border-radius:6px; display:inline-block; font-weight:600;">➕ 채널 추가</a>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
         
         st.markdown("---")
         st.markdown("### 📞 상담 프로세스")
