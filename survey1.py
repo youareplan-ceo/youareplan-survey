@@ -3,8 +3,9 @@ import requests
 import json
 from datetime import datetime
 import re
+import random
 
-RELEASE_VERSION = "v5"
+RELEASE_VERSION = "v6"
 
 # 페이지 설정
 st.set_page_config(
@@ -133,22 +134,65 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def save_to_google_sheet(data):
-    """Google Apps Script로 데이터 전송"""
+def _get_query_params():
+    """
+    Streamlit v1.28+ : st.query_params (mapping[str,str])
+    Older versions   : st.experimental_get_query_params (dict[str, list[str]])
+    Returns a dict[str, str] normalized to single string values.
+    """
     try:
-        data['token'] = API_TOKEN
-        
-        response = requests.post(
-            APPS_SCRIPT_URL,
-            data=json.dumps(data),
-            headers={'Content-Type': 'application/json'}
-        )
-        
-        result = response.json()
-        return result.get('status') == 'success'
-    except Exception as e:
-        st.error(f"저장 중 오류 발생: {e}")
-        return False
+        qp = st.query_params  # new API
+        # qp can behave like mapping; convert to plain dict[str,str]
+        return {k: str(v) for k, v in qp.items()}
+    except Exception:
+        # fallback to experimental (old) -> pick first item from list
+        qp = st.experimental_get_query_params()
+        return {k: (v[0] if isinstance(v, list) and v else "") for k, v in qp.items()}
+
+def _get_qp(name: str, default: str = "") -> str:
+    return _get_query_params().get(name, default)
+
+def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 1, test_mode: bool = False):
+    """Google Apps Script로 데이터 전송 (타임아웃/재시도/메시지 표시, 테스트 모드 지원)"""
+    if test_mode:
+        # 테스트 모드에서는 실제 저장을 수행하지 않음
+        return {"status": "test", "message": "테스트 모드 - 저장 생략"}
+
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            data['token'] = API_TOKEN
+            # JSON 본문 전송
+            response = requests.post(
+                APPS_SCRIPT_URL,
+                json=data,
+                headers={'Content-Type': 'application/json'},
+                timeout=timeout_sec,
+            )
+            # HTTP 에러 코드 처리
+            response.raise_for_status()
+            # JSON 파싱 및 상태 확인
+            result = response.json()
+            status = result.get('status', '')
+            if status == 'success':
+                return result
+            else:
+                # 서버가 전달한 메시지 그대로 표시
+                st.error(f"서버 응답: {result.get('message', '알 수 없는 오류')}")
+                return result
+        except requests.exceptions.Timeout as e:
+            last_err = e
+            if attempt < retries:
+                continue
+            st.error("요청이 시간 초과되었습니다. 네트워크 상태 확인 후 다시 시도해주세요.")
+        except requests.exceptions.RequestException as e:
+            last_err = e
+            st.error(f"요청 중 오류: {e}")
+        except ValueError as e:
+            last_err = e
+            st.error("서버 응답을 해석하지 못했습니다(JSON 파싱 실패). 잠시 후 다시 시도해주세요.")
+        break
+    return {"status": "error", "message": str(last_err) if last_err else "unknown error"}
 
 # 지역 목록
 REGIONS = ["서울", "부산", "대구", "인천", "광주", "대전", "울산",
@@ -189,6 +233,11 @@ def main():
 """, unsafe_allow_html=True)
     st.markdown("##### 기초 상담을 위해 아래 항목을 정확히 입력해 주세요.")
 
+    # 테스트 모드 안내
+    is_test_mode = (_get_qp("test") == "true")
+    if is_test_mode:
+        st.warning("⚠️ 현재 **테스트 모드**입니다. 제출해도 실제 저장되지 않습니다.")
+
     # 안내문: 자동 번역 끄기 안내
     st.info("✔ 본 설문은 정책자금 지원 가능성 검토를 위한 **기초 상담 절차**입니다. 입력된 정보는 관련 법령에 따라 안전하게 관리됩니다. (자동 번역 기능은 끄고 작성해 주세요)")
     
@@ -219,6 +268,10 @@ def main():
     st.write("3분이면 끝! 잘못 입력해도 상담 시 바로잡아 드립니다.")
     
     with st.form("first_survey"):
+        # 중복 제출 방지 플래그 초기화
+        if 'submitted' not in st.session_state:
+            st.session_state.submitted = False
+
         col1, col2 = st.columns(2)
         
         with col1:
@@ -287,7 +340,9 @@ def main():
         # 제출
         submitted = st.form_submit_button("📩 정책자금 상담 신청", type="primary")
         
-        if submitted:
+        if submitted and not st.session_state.submitted:
+            st.session_state.submitted = True
+
             # 연락처 정규화/검증
             raw_phone = phone
             digits = re.sub(r"[^0-9]", "", raw_phone or "")
@@ -303,20 +358,25 @@ def main():
 
             if not name or not formatted_phone:
                 st.error("성함과 연락처는 필수 입력 항목입니다.")
+                st.session_state.submitted = False
             elif not phone_valid:
                 st.error("연락처 형식을 확인해주세요. 예: 010-1234-5678")
+                st.session_state.submitted = False
             elif not privacy_agree:
                 st.error("개인정보 수집·이용 동의는 필수입니다.")
+                st.session_state.submitted = False
             else:
                 with st.spinner("상담 신청을 처리하고 있습니다..."):
-                    # 쿼리 파라미터에서 UTM 추출
-                    qp = st.experimental_get_query_params()
-                    utm_source = (qp.get("utm_source", [""])[0])
-                    utm_medium = (qp.get("utm_medium", [""])[0])
-                    utm_campaign = (qp.get("utm_campaign", [""])[0])
-                    utm_term = (qp.get("utm_term", [""])[0])
-                    utm_content = (qp.get("utm_content", [""])[0])
+                    # 쿼리 파라미터에서 UTM/테스트 추출 (신규 API 호환)
+                    utm_source = _get_qp("utm_source")
+                    utm_medium = _get_qp("utm_medium")
+                    utm_campaign = _get_qp("utm_campaign")
+                    utm_term = _get_qp("utm_term")
+                    utm_content = _get_qp("utm_content")
                     submitted_at = datetime.now().isoformat(timespec="seconds")
+
+                    # 접수번호 생성 (클라이언트 측, 일시적인 충돌 방지용)
+                    receipt_no = f"YP{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
 
                     # 데이터 준비
                     survey_data = {
@@ -338,16 +398,26 @@ def main():
                         'utm_term': utm_term,
                         'utm_content': utm_content,
                         'release_version': RELEASE_VERSION,
-                        'submitted_at': submitted_at
+                        'submitted_at': submitted_at,
+                        'receipt_no': receipt_no,
+                        'test_mode': is_test_mode,
                     }
                     
-                    # Google Sheets에 저장
-                    if save_to_google_sheet(survey_data):
+                    # Google Sheets 저장 (테스트 모드면 저장 생략)
+                    result = save_to_google_sheet(survey_data, timeout_sec=12, retries=1, test_mode=is_test_mode)
+
+                    if result.get('status') in ('success', 'test'):
+                        if is_test_mode:
+                            st.info("🧪 테스트 모드: 저장은 수행하지 않았습니다.")
                         st.success("✅ 상담 신청이 완료되었습니다!")
+                        st.info(f"📋 접수번호: **{receipt_no}**")
                         st.info("📞 1영업일 내 전문가가 연락드립니다. 급한 문의는 카카오 채널 ‘유아플랜 컨설팅’으로 남겨주세요.")
                         st.toast("신청이 접수되었습니다.", icon="✅")
                     else:
-                        st.error("❌ 신청 중 오류가 발생했습니다. 다시 시도해주세요.")
+                        msg = result.get('message', '알 수 없는 오류로 실패했습니다. 잠시 후 다시 시도해주세요.')
+                        st.error(f"❌ 신청 중 오류: {msg}")
+                        # 실패 시 재제출 허용
+                        st.session_state.submitted = False
 
 if __name__ == "__main__":
     main()
