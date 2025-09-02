@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 import re
 import random
+import os
 
 # ---- 전화번호 포맷 유틸 ----
 def _digits_only(s: str) -> str:
@@ -26,7 +27,13 @@ RELEASE_VERSION = "v6"
 
 # Apps Script URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"  # current exec URL
-API_TOKEN = "youareplan"
+# API token is loaded from Streamlit secrets or environment for security
+try:
+    API_TOKEN = st.secrets["API_TOKEN"]  # set in .streamlit/secrets.toml or Render env
+except Exception:
+    API_TOKEN = os.getenv("API_TOKEN", "")
+    if not API_TOKEN:
+        st.warning("⚠️ API_TOKEN이 설정되지 않았습니다. .streamlit/secrets.toml 또는 Render 환경변수를 확인하세요.")
 
 # KakaoTalk Channel (real public ID)
 KAKAO_CHANNEL_ID = "_LWxexmn"
