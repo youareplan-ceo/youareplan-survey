@@ -551,12 +551,47 @@ def main():
                         # 다음 행동 유도(CTA): 카카오 채널 채팅 / 채널 추가
                         st.markdown(
                             f"""
-      <div class=\"cta-wrap\">
-        <div style=\"margin-bottom:8px;color:#333;\">바로 궁금하신 점이 있으시면 지금 상담사와 대화하실 수 있어요.</div>
-        <a class=\"cta-btn cta-primary\" href=\"{KAKAO_CHAT_URL}\" target=\"_blank\">💬 지금 바로 전문가에게 물어보기</a>
-        <div class=\"cta-gap\"></div>
-        <a class=\"cta-btn cta-secondary\" href=\"{KAKAO_CHANNEL_URL}\" target=\"_blank\">➕ 채널 추가하고 소식 받기</a>
+      <div class="cta-wrap">
+        <div style="margin-bottom:8px;color:#333;">카카오 채널에서 바로 문의하시면 가장 빠르게 도와드릴 수 있어요.</div>
+        <a class="cta-btn cta-primary" href="{KAKAO_CHANNEL_URL}" target="_blank">💬 카카오 채널 추가 및 대화하기</a>
       </div>
+      """,
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            """
+      <div id="auto-return-msg" style="color:#6b7280;margin-top:6px;">
+        약 <span id="countdown">5</span>초 후 이전 화면으로 자동으로 돌아갑니다.
+        바로 이동하려면 브라우저의 ‘뒤로가기’를 눌러주세요.
+      </div>
+      <script>
+      (function(){
+        const fallback = '/';
+        function goBack(){
+          if (document.referrer && document.referrer !== location.href) {
+            location.replace(document.referrer); return;
+          }
+          if (history.length > 1) { history.back(); return; }
+          const q = new URLSearchParams(location.search);
+          const ret = q.get('return_to');
+          if (ret) { location.replace(ret); return; }
+          location.replace(fallback);
+        }
+        // countdown
+        var left = 5;
+        var el = document.getElementById('countdown');
+        if (el) { el.textContent = left; }
+        var timer = setInterval(function(){
+          left -= 1;
+          if (left <= 0){
+            clearInterval(timer);
+            goBack();
+          } else {
+            if (el) { el.textContent = left; }
+          }
+        }, 1000);
+      })();
+      </script>
       """,
                             unsafe_allow_html=True,
                         )
