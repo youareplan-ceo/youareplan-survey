@@ -205,19 +205,25 @@ st.markdown("""
 <style>
   :root { --primary-color:#002855 !important; } /* Streamlit theme primary */
 
-  /* Strong selectors to win against built-in button theming */
+  /* Strong selectors to win against built‑in button theming */
   button[kind="primary"],
   button[data-testid="baseButton-primary"],
   .stButton > button[kind="primary"],
-  .stButton button[kind="primary"]{
+  .stButton button[kind="primary"],
+  /* ---- form submit button (Streamlit uses a special testid) ---- */
+  div[data-testid="stFormSubmitButton"] button,
+  div[data-testid="stFormSubmitButton"] > button {
     background:#002855 !important;
     border:1px solid #002855 !important;
     color:#ffffff !important;
     box-shadow:none !important;
   }
+
   button[kind="primary"]:hover,
   button[data-testid="baseButton-primary"]:hover,
-  .stButton > button[kind="primary"]:hover{
+  .stButton > button[kind="primary"]:hover,
+  div[data-testid="stFormSubmitButton"] button:hover,
+  div[data-testid="stFormSubmitButton"] > button:hover {
     filter: brightness(0.95) !important;
   }
 </style>
