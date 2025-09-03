@@ -221,6 +221,24 @@ st.markdown("""
     box-shadow:none !important;
   }
 
+  /* --- Force submit button label text/icon to white (robust override) --- */
+  div[data-testid="stFormSubmitButton"] button *,
+  .stButton > button[kind="primary"] *,
+  button[kind="primary"] *,
+  button[data-testid="baseButton-primary"] * {
+    color:#ffffff !important;
+    fill:#ffffff !important; /* for svg icons */
+  }
+
+  /* Active / focus state keep white text as well */
+  div[data-testid="stFormSubmitButton"] button:focus *,
+  div[data-testid="stFormSubmitButton"] button:active *,
+  .stButton > button[kind="primary"]:focus *,
+  .stButton > button[kind="primary"]:active * {
+    color:#ffffff !important;
+    fill:#ffffff !important;
+  }
+
   button[kind="primary"]:hover,
   button[data-testid="baseButton-primary"]:hover,
   .stButton > button[kind="primary"]:hover,
