@@ -266,6 +266,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- 최종 강제: 제출 버튼 네이비 + 흰색 텍스트 고정 (특정 셀렉터 우선) ---
+st.markdown("""
+<style>
+  :root { --primary-color:#002855 !important; }
+  /* Form submit button absolute override */
+  div[data-testid="stFormSubmitButton"] button,
+  div[data-testid="stFormSubmitButton"] > button,
+  form div[data-testid="stFormSubmitButton"] button {
+    background-color:#002855 !important;
+    border-color:#002855 !important;
+    color:#ffffff !important;
+    box-shadow:none !important;
+  }
+  /* Keep label/icon white in all states */
+  div[data-testid="stFormSubmitButton"] button *,
+  div[data-testid="stFormSubmitButton"] > button * {
+    color:#ffffff !important;
+    fill:#ffffff !important;
+  }
+  /* Hover/active/focus states */
+  div[data-testid="stFormSubmitButton"] button:hover,
+  div[data-testid="stFormSubmitButton"] button:active,
+  div[data-testid="stFormSubmitButton"] button:focus {
+    background-color:#002855 !important;
+    border-color:#002855 !important;
+    color:#ffffff !important;
+    filter:brightness(0.95) !important;
+  }
+</style>
+""", unsafe_allow_html=True)
+
 def _get_query_params():
     """
     Streamlit v1.28+ : st.query_params (mapping[str,str])
