@@ -7,6 +7,8 @@ import re
 import random
 import os
 
+st.set_page_config(page_title="유아플랜 1차 설문", page_icon="📝", layout="centered")
+
 # ---- 전화번호 포맷 유틸 ----
 def _digits_only(s: str) -> str:
     return re.sub(r"[^0-9]", "", s or "")
