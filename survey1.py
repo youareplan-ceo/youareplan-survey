@@ -439,80 +439,23 @@ def main():
                             </a>
                         </div>
                         """, unsafe_allow_html=True)
-                        
-                        # --- 제출 후 5초 카운트다운 → 뒤로가기/머물기/즉시 이동 ---
+
+                        # 제출 성공 후 1.2초 뒤 자동 복귀 (referrer → history.back → ?return_to → /)
                         st.markdown(
                             """
-<div id="auto-return-wrap" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fff;">
-  <div id="auto-return-msg" style="color:#374151;margin-bottom:8px;line-height:1.5;">
-    <strong style="color:#111;">안내:</strong> <span style="color:#111;">이 창은</span>
-    <strong><span id="countdown">5</span>초</strong> 후 이전 화면으로 자동 이동합니다.
-    필요하시면 아래 버튼으로 자동 이동을 취소하실 수 있어요.
-  </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <a class="cta-btn cta-secondary" id="stay-here-btn" href="#" onclick="window.__stayHere=true;return false;" aria-label="자동 이동 취소">
-      ⏸️ 이 창에 머물기
-    </a>
-    <a class="cta-btn cta-primary" id="go-now-btn" href="#" onclick="(function(){try{window.__forceGoNow=true;}catch(e){}})();return false;" aria-label="지금 바로 이전 화면으로 이동">
-      🔙 지금 바로 돌아가기
-    </a>
-  </div>
-</div>
 <script>
 (function(){
-  var live = document.createElement('div');
-  live.setAttribute('aria-live','polite');
-  live.setAttribute('aria-atomic','true');
-  live.style.position='absolute';
-  live.style.left='-9999px';
-  document.body.appendChild(live);
-  function updateLive(msg){ try{ live.textContent = msg; }catch(e){} }
-
   function goBack(){
-    if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
-    if (history.length > 1) { history.back(); return; }
     try {
+      if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+      if (history.length > 1) { history.back(); return; }
       var q = new URLSearchParams(location.search);
       var ret = q.get('return_to');
       if (ret) { location.replace(ret); return; }
     } catch(e) {}
     location.replace('/');
   }
-
-  var left = 5;
-  var el = document.getElementById('countdown');
-
-  var goNow = document.getElementById('go-now-btn');
-  if (goNow){
-    goNow.addEventListener('click', function(e){
-      e.preventDefault();
-      goBack();
-    });
-  }
-
-  var timer = setInterval(function(){
-    if (window.__stayHere === true) {
-      clearInterval(timer);
-      var msg = document.getElementById('auto-return-msg');
-      if (msg){ msg.innerHTML = '자동 이동이 취소되었습니다. 필요 시 상단의 링크 또는 브라우저 뒤로가기를 이용해 주세요.'; }
-      updateLive('자동 이동이 취소되었습니다.');
-      return;
-    }
-    if (window.__forceGoNow === true) {
-      clearInterval(timer);
-      goBack();
-      return;
-    }
-    left -= 1;
-    if (left <= 0){
-      clearInterval(timer);
-      goBack();
-    } else {
-      if (el) { el.textContent = left; updateLive(left + '초 남았습니다.'); }
-    }
-  }, 1000);
-
-  updateLive('5초 후 이전 화면으로 이동합니다.');
+  setTimeout(goBack, 1200);
 })();
 </script>
                             """,
