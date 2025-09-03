@@ -10,6 +10,7 @@ import os
 st.set_page_config(page_title="유아플랜 2차 설문", page_icon="📝", layout="centered")
 
 # ---- 전화번호 포맷 유틸 ----
+
 def _digits_only(s: str) -> str:
     return re.sub(r"[^0-9]", "", s or "")
 
@@ -17,6 +18,13 @@ def format_phone_from_digits(d: str) -> str:
     """11자리(010xxxxxxxx)면 자동으로 010-0000-0000 형태로 변환"""
     if len(d) == 11 and d.startswith("010"):
         return f"{d[0:3]}-{d[3:7]}-{d[7:11]}"
+    return d
+
+# ---- 사업자번호 포맷 유틸 ----
+def format_biz_no(d: str) -> str:
+    """10자리 사업자번호를 3-2-5 형태(예: 123-45-67890)로 변환"""
+    if len(d) == 10:
+        return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
 
 
@@ -90,11 +98,11 @@ st.markdown("""
     margin:0;
   }
 
-  /* 버튼(제출) 관공서 파랑 */
+  /* 버튼(제출) 네이비 톤 */
   .stButton > button{
-    background:var(--gov-blue) !important;
+    background:var(--gov-navy) !important;
     color:#fff !important;
-    border:1px solid var(--gov-blue) !important;
+    border:1px solid var(--gov-navy) !important;
     font-weight:600;
     padding:10px 16px;
     border-radius:6px;
@@ -381,11 +389,13 @@ def main():
                 st.session_state.submitted = False
             else:
                 with st.spinner("정보를 제출하고 있습니다..."):
+                    # 사업자등록번호 포맷(숫자만 → 3-2-5)
+                    biz_reg_no_formatted = format_biz_no(_digits_only(biz_reg_no or ""))
                     survey_data = {
                         'name': name,
                         'phone': normalized_phone,
                         'email': email,
-                        'biz_reg_no': biz_reg_no,
+                        'biz_reg_no': biz_reg_no_formatted,
                         'startup_date': startup_date.strftime('%Y-%m'),
                         'revenue_y1': revenue_y1,
                         'revenue_y2': revenue_y2,
