@@ -94,9 +94,9 @@ st.markdown("""
 
   /* 버튼(제출) 관공서 파랑 */
   .stButton > button{
-    background:var(--gov-blue) !important;
+    background:var(--gov-navy) !important;
     color:#fff !important;
-    border:1px solid var(--gov-blue) !important;
+    border:1px solid var(--gov-navy) !important;
     font-weight:600;
     padding:10px 16px;
     border-radius:6px;
