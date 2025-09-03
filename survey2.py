@@ -494,6 +494,31 @@ def main():
                             """,
                             unsafe_allow_html=True,
                         )
+                        # --- 제출 후 5초 카운트다운 → 뒤로가기/창닫기 ---
+                        st.markdown("""
+<script>
+  (function(){
+    var left = 5;
+    var el = document.createElement('div');
+    el.style.marginTop = '10px';
+    el.style.fontSize = '14px';
+    el.style.color = '#374151';
+    el.innerHTML = '🕔 5초 후 이전 화면으로 돌아갑니다...';
+    document.currentScript.parentElement.appendChild(el);
+
+    var timer = setInterval(function(){
+      left -= 1;
+      if (left > 0) {
+        el.innerHTML = '🕔 ' + left + '초 후 이전 화면으로 돌아갑니다...';
+      } else {
+        clearInterval(timer);
+        try { window.close(); } catch(e) {}
+        history.back();
+      }
+    }, 1000);
+  })();
+</script>
+""", unsafe_allow_html=True)
                     else:
                         msg = result.get('message', '알 수 없는 오류로 실패했습니다. 잠시 후 다시 시도해주세요.')
                         st.error(f"❌ 제출 중 오류: {msg}")
