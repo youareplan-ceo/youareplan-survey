@@ -115,6 +115,18 @@ st.markdown("""
     border-radius:6px !important;
     background:#ffffff !important;
     box-shadow: 0 0 0 1000px #ffffff inset !important;
+    color:#111111 !important;           /* ← 텍스트 검정 고정 */
+    caret-color:#111111 !important;      /* ← 커서 색상 고정 */
+  }
+
+  /* 입력 텍스트 가시성 강제 (다크테마 잔류/브라우저 자동완성 이슈 대응) */
+  .stTextInput input,
+  .stTextArea textarea,
+  div[data-baseweb="select"] input,
+  div[data-baseweb="select"] [contenteditable="true"] {
+    color:#111111 !important;
+    caret-color:#111111 !important;
+    -webkit-text-fill-color:#111111 !important; /* Safari */
   }
 
   /* placeholder 가독성 */
