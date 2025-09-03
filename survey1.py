@@ -62,10 +62,12 @@ st.markdown("""
   .notranslate,[translate="no"]{ translate: no !important; }
   .stApp * { translate: no !important; }
 
-  /* 사이드바 모바일에서 숨김(기존 정책 유지) */
-  @media (max-width: 768px) {
-    [data-testid="stSidebar"] { display: none !important; }
-  }
+  /* 사이드바 전면 숨김 (모바일/데스크톱 공통) */
+  [data-testid="stSidebar"] { display: none !important; }
+  /* 사이드바 토글 버튼(접힘 컨트롤)도 숨김 */
+  [data-testid="collapsedControl"],
+  header [data-testid="baseButton-header"],
+  header [data-testid="baseButton-headerNoPadding"] { display: none !important; }
 
   /* 상단 관공서 느낌 헤더 */
   .gov-topbar{
@@ -353,18 +355,6 @@ def main():
         """
     )
     
-    # 사이드바
-    with st.sidebar:
-        st.markdown("### 💡 서비스 소개")
-        st.success("✅ 전문가 무료 상담")
-        st.success("✅ 맞춤형 매칭 서비스")
-        
-        st.markdown("---")
-        st.markdown("### 📞 상담 프로세스")
-        st.info("1️⃣ 3분 설문 완료\n"
-                "2️⃣ 1영업일 내 전문가 연락\n"
-                "3️⃣ 무료 상담 진행\n"
-                "4️⃣ 맞춤 정책자금 안내")
     
     # 설문지
     st.markdown("### 📝 1차 설문 - 기본 정보")
