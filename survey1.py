@@ -119,6 +119,22 @@ st.markdown("""
     caret-color:#111111 !important;      /* ← 커서 색상 고정 */
   }
 
+  /* 입력 컨테이너/포커스 그림자 완화 */
+  .stTextInput > div,
+  .stSelectbox > div,
+  .stMultiSelect > div,
+  .stTextArea > div {
+    box-shadow: none !important;           /* 외곽 그림자 제거 */
+    background:#ffffff !important;
+  }
+  .stTextInput input:focus,
+  .stTextArea textarea:focus,
+  div[data-baseweb="select"] input:focus,
+  div[data-baseweb="select"] [contenteditable="true"]:focus {
+    outline: none !important;
+    box-shadow: none !important;           /* 포커스 시 과한 그림자 제거 */
+  }
+
   /* 입력 텍스트 가시성 강제 (다크테마 잔류/브라우저 자동완성 이슈 대응) */
   .stTextInput input,
   .stTextArea textarea,
@@ -461,9 +477,13 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # 제출 성공 후 1.2초 뒤 자동 복귀 (referrer → history.back → ?return_to → /)
+                        # 제출 성공 후 안내 및 5초 뒤 자동 복귀 (referrer → history.back → ?return_to → /)
                         st.markdown(
                             """
+"""
+<div id="auto-exit-note" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#f5f7fa;color:#111;">
+  제출이 완료되었습니다. <strong><span id="exit_count">5</span>초</strong> 후 이전 화면으로 이동해요.
+</div>
 <script>
 (function(){
   function goBack(){
@@ -476,10 +496,17 @@ def main():
     } catch(e) {}
     location.replace('/');
   }
-  setTimeout(goBack, 1200);
+  var left = 5;
+  var el = document.getElementById('exit_count');
+  var t = setInterval(function(){
+    left -= 1;
+    if (left <= 0){ clearInterval(t); goBack(); }
+    else if (el) { el.textContent = left; }
+  }, 1000);
 })();
 </script>
-                            """,
+"""
+                            ,
                             unsafe_allow_html=True,
                         )
                     else:
