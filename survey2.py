@@ -248,6 +248,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- 버튼 텍스트 색상 강제 흰색 적용 ---
+st.markdown("""
+<style>
+  /* 모든 버튼 내부 텍스트 흰색 고정 */
+  .stButton > button * {
+    color: #ffffff !important;
+  }
+  div[data-testid="stFormSubmitButton"] button * {
+    color: #ffffff !important;
+  }
+</style>
+""", unsafe_allow_html=True)
+
 def _get_query_params():
     """
     Streamlit v1.28+ : st.query_params (mapping[str,str])
