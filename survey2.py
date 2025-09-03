@@ -22,6 +22,17 @@ def format_biz_no(d: str) -> str:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
 
+# ---- on_change handlers for live formatting (2차) ----
+def _phone2_on_change():
+    raw = st.session_state.get("phone2_input", "")
+    d = _digits_only(raw)
+    st.session_state.phone2_input = format_phone_from_digits(d)
+
+def _biz_on_change():
+    raw = st.session_state.get("biz_no_input", "")
+    d = _digits_only(raw)
+    st.session_state.biz_no_input = format_biz_no(d)
+
 RELEASE_VERSION = "v2025-09-03-clean-fix"
 
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwH8OKYidK3GRtcx5lTvvmih6iTidS0yhuoSu3DcWn8WPl_LZ6gBcnbZHvqDksDX7DD/exec"
@@ -123,6 +134,16 @@ st.markdown("""
     background: #ffffff !important;
     color: #111111 !important;
   }
+  /* placeholder & autofill visibility */
+  ::placeholder { color:#9aa0a6 !important; opacity:1 !important; }
+  input::placeholder, textarea::placeholder { color:#9aa0a6 !important; }
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color:#111111 !important;
+    box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+  }
   
   /* 체크박스 */
   .stCheckbox {
@@ -214,6 +235,8 @@ def main():
         st.warning("⚠️ 테스트 모드 - 실제 저장되지 않습니다.")
 
     st.info("✔ 1차 상담 후 진행하는 **심화 진단** 절차입니다.")
+    st.session_state.setdefault("phone2_input", "")
+    st.session_state.setdefault("biz_no_input", "")
     
     with st.form("second_survey"):
         if 'submitted_2' not in st.session_state:
@@ -224,14 +247,14 @@ def main():
         # A. 기본 정보
         st.markdown("#### 👤 기본 정보")
         name = st.text_input("성함 (필수)", placeholder="홍길동").strip()
-        phone_raw = st.text_input("연락처 (필수)", placeholder="010-0000-0000")
-        st.caption("숫자만 입력하세요. 자동으로 하이픈이 추가됩니다.")
+        st.text_input("연락처 (필수)", key="phone2_input", placeholder="010-0000-0000", on_change=_phone2_on_change)
+        st.caption("숫자만 입력하세요. 입력 중 자동으로 하이픈이 추가됩니다.")
         email = st.text_input("이메일 (선택)", placeholder="email@example.com")
         st.markdown("---")
         
         # B. 사업 정보
         st.markdown("#### 📊 사업 정보")
-        biz_reg_no = st.text_input("사업자등록번호 (필수)", placeholder="000-00-00000")
+        st.text_input("사업자등록번호 (필수)", key="biz_no_input", placeholder="000-00-00000", on_change=_biz_on_change)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -305,13 +328,16 @@ def main():
         if submitted and not st.session_state.submitted_2:
             st.session_state.submitted_2 = True
             
-            # 전화번호 포맷
-            digits = _digits_only(phone_raw)
-            formatted_phone = format_phone_from_digits(digits) if len(digits) == 11 else phone_raw
-            
-            # 사업자번호 포맷
-            biz_digits = _digits_only(biz_reg_no)
-            formatted_biz = format_biz_no(biz_digits) if len(biz_digits) == 10 else biz_reg_no
+            # 전화번호/사업자번호는 실시간 포맷된 값을 사용
+            phone_val = st.session_state.get("phone2_input", "").strip()
+            biz_val = st.session_state.get("biz_no_input", "").strip()
+
+            # 최종 보정(혹시나 포맷이 안 된 경우 대비)
+            d_phone = _digits_only(phone_val)
+            formatted_phone = format_phone_from_digits(d_phone) if d_phone else phone_val
+
+            d_biz = _digits_only(biz_val)
+            formatted_biz = format_biz_no(d_biz) if d_biz else biz_val
             
             # 유효성 검사
             if not all([name, formatted_phone, formatted_biz, privacy_agree]):
@@ -354,20 +380,17 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # 1.2초 후 자동 복귀
+                        # 1.5초 후 자동 복귀
                         st.markdown("""
                         <script>
-                        setTimeout(function(){
-                            if (document.referrer && document.referrer !== location.href) { 
-                                location.replace(document.referrer); 
-                                return; 
-                            }
-                            if (history.length > 1) { 
-                                history.back(); 
-                                return; 
-                            }
+                        (function(){
+                          function goBack(){
+                            if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+                            if (history.length > 1) { history.back(); return; }
                             location.replace('/');
-                        }, 1200);
+                          }
+                          setTimeout(goBack, 1500);
+                        })();
                         </script>
                         """, unsafe_allow_html=True)
 
