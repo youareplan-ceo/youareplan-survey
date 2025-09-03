@@ -9,6 +9,7 @@ import os
 # Streamlit 페이지 설정
 st.set_page_config(page_title="유아플랜 2차 설문", page_icon="📝", layout="centered")
 
+
 # ---- 전화번호 포맷 유틸 ----
 
 def _digits_only(s: str) -> str:
@@ -26,6 +27,10 @@ def format_biz_no(d: str) -> str:
     if len(d) == 10:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
+
+# ---- 숫자만 남기기 유틸 ----
+def only_digits(s: str) -> str:
+    return re.sub(r"[^0-9]", "", s or "")
 
 
 RELEASE_VERSION = "v2_stage2"
@@ -457,11 +462,11 @@ def main():
                         'business_name': company_name,
                         'biz_reg_no': biz_reg_no_formatted,
                         'startup_date': startup_date.strftime('%Y-%m'),
-                        'revenue_y1': revenue_y1,
-                        'revenue_y2': revenue_y2,
-                        'revenue_y3': revenue_y3,
-                        'capital_amount': capital_amount,
-                        'debt_amount': debt_amount,
+                        'revenue_y1': only_digits(revenue_y1),
+                        'revenue_y2': only_digits(revenue_y2),
+                        'revenue_y3': only_digits(revenue_y3),
+                        'capital_amount': only_digits(capital_amount),
+                        'debt_amount': only_digits(debt_amount),
                         'ip_status': ', '.join(ip_status) if ip_status else '해당 없음',
                         'research_lab_status': research_lab_status,
                         'official_certs': ', '.join(official_certs) if official_certs else '해당 없음',
@@ -495,30 +500,92 @@ def main():
                             unsafe_allow_html=True,
                         )
                         # --- 제출 후 5초 카운트다운 → 뒤로가기/창닫기 ---
-                        st.markdown("""
+                        st.markdown(
+                            """
+<div id="auto-return-wrap" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fff;">
+  <div id="auto-return-msg" style="color:#374151;margin-bottom:8px;line-height:1.5;">
+    <strong style="color:#111;">안내:</strong> <span style="color:#111;">이 창은</span>
+    <strong><span id="countdown">5</span>초</strong> 후 이전 화면으로 자동 이동합니다.
+    필요하시면 아래 버튼으로 자동 이동을 취소하실 수 있어요.
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a class="cta-btn cta-secondary" id="stay-here-btn" href="#" onclick="window.__stayHere=true;return false;" aria-label="자동 이동 취소">
+      ⏸️ 이 창에 머물기
+    </a>
+    <a class="cta-btn cta-primary" id="go-now-btn" href="#" onclick="(function(){try{window.__forceGoNow=true;}catch(e){}})();return false;" aria-label="지금 바로 이전 화면으로 이동">
+      🔙 지금 바로 돌아가기
+    </a>
+  </div>
+</div>
 <script>
-  (function(){
-    var left = 5;
-    var el = document.createElement('div');
-    el.style.marginTop = '10px';
-    el.style.fontSize = '14px';
-    el.style.color = '#374151';
-    el.innerHTML = '🕔 5초 후 이전 화면으로 돌아갑니다...';
-    document.currentScript.parentElement.appendChild(el);
+(function(){
+  // 접근성: 화면읽기기에서 카운트다운이 변할 때 읽어주도록 설정
+  var live = document.createElement('div');
+  live.setAttribute('aria-live','polite');
+  live.setAttribute('aria-atomic','true');
+  live.style.position='absolute';
+  live.style.left='-9999px';
+  document.body.appendChild(live);
 
-    var timer = setInterval(function(){
-      left -= 1;
-      if (left > 0) {
-        el.innerHTML = '🕔 ' + left + '초 후 이전 화면으로 돌아갑니다...';
-      } else {
-        clearInterval(timer);
-        try { window.close(); } catch(e) {}
-        history.back();
-      }
-    }, 1000);
-  })();
+  function updateLive(msg){ try{ live.textContent = msg; }catch(e){} }
+
+  function goBack(){
+    // 1) referrer 우선
+    if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+    // 2) 브라우저 히스토리
+    if (history.length > 1) { history.back(); return; }
+    // 3) 쿼리 파라미터 return_to
+    try {
+      var q = new URLSearchParams(location.search);
+      var ret = q.get('return_to');
+      if (ret) { location.replace(ret); return; }
+    } catch(e) {}
+    // 4) 최종 기본값
+    location.replace('/');
+  }
+
+  var left = 5;
+  var el = document.getElementById('countdown');
+
+  // 강제 이동 버튼
+  var goNow = document.getElementById('go-now-btn');
+  if (goNow){
+    goNow.addEventListener('click', function(e){
+      e.preventDefault();
+      goBack();
+    });
+  }
+
+  // 타이머
+  var timer = setInterval(function(){
+    if (window.__stayHere === true) {
+      clearInterval(timer);
+      var msg = document.getElementById('auto-return-msg');
+      if (msg){ msg.innerHTML = '자동 이동이 취소되었습니다. 필요 시 상단의 링크 또는 브라우저 뒤로가기를 이용해 주세요.'; }
+      updateLive('자동 이동이 취소되었습니다.');
+      return;
+    }
+    if (window.__forceGoNow === true) {
+      clearInterval(timer);
+      goBack();
+      return;
+    }
+    left -= 1;
+    if (left <= 0){
+      clearInterval(timer);
+      goBack();
+    } else {
+      if (el) { el.textContent = left; updateLive(left + '초 남았습니다.'); }
+    }
+  }, 1000);
+
+  // 초기 announce
+  updateLive('5초 후 이전 화면으로 이동합니다.');
+})();
 </script>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
                     else:
                         msg = result.get('message', '알 수 없는 오류로 실패했습니다. 잠시 후 다시 시도해주세요.')
                         st.error(f"❌ 제출 중 오류: {msg}")
