@@ -480,7 +480,6 @@ def main():
                         # 제출 성공 후 안내 및 5초 뒤 자동 복귀 (referrer → history.back → ?return_to → /)
                         st.markdown(
                             """
-"""
 <div id="auto-exit-note" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#f5f7fa;color:#111;">
   제출이 완료되었습니다. <strong><span id="exit_count">5</span>초</strong> 후 이전 화면으로 이동해요.
 </div>
@@ -505,8 +504,7 @@ def main():
   }, 1000);
 })();
 </script>
-"""
-                            ,
+""",
                             unsafe_allow_html=True,
                         )
                     else:
