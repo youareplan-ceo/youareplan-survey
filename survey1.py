@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 from datetime import datetime
 import re
 import random
@@ -22,7 +21,7 @@ def _phone_on_change():
     # 사용자가 타이핑할 때 숫자만 남겨 하이픈 자동 삽입
     raw = st.session_state.get("phone_input", "")
     d = _digits_only(raw)
-    st.session_state.phone_input = format_phone_from_digits(d)
+    st.session_state["phone_input"] = format_phone_from_digits(d)
 
 RELEASE_VERSION = "v2025-09-03-1"
 
@@ -306,22 +305,15 @@ def main():
     st.markdown("### 📝 1차 설문 - 기본 정보")
     st.write("3분이면 완료! 상담 시 수정 가능합니다.")
 
-    # 이름/연락처 (폼 밖)
-    name = st.text_input("👤 성함 (필수)", placeholder="홍길동", key="name_input").strip()
-    
-    st.session_state.setdefault("phone_input", "")
-    st.text_input(
-        "📞 연락처 (필수)",
-        key="phone_input",
-        placeholder="010-0000-0000",
-        on_change=_phone_on_change,
-    )
-    phone_error_placeholder = st.empty()
-    st.caption("숫자만 입력하세요. 자동으로 하이픈이 추가됩니다.")
-    
     with st.form("first_survey"):
         if 'submitted' not in st.session_state:
             st.session_state.submitted = False
+
+        # ── 기본 인적사항 (폼 내부로 이동) ──
+        name = st.text_input("👤 성함 (필수)", placeholder="홍길동", key="name_input").strip()
+        phone_input = st.text_input("📞 연락처 (필수)", key="phone_input", placeholder="010-0000-0000")
+        phone_error_placeholder = st.empty()
+        st.caption("숫자만 입력하세요. 제출 시 010-0000-0000 형식으로 자동 포맷됩니다.")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -385,7 +377,7 @@ def main():
         if submitted and not st.session_state.submitted:
             st.session_state.submitted = True
 
-            d = _digits_only(st.session_state.get("phone_input", ""))
+            d = _digits_only(phone_input)
             formatted_phone = format_phone_from_digits(d)
             phone_valid = (len(d) == 11 and d.startswith("010"))
             
