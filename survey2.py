@@ -327,6 +327,7 @@ def main():
         
         # A. 기본 정보 (1차와 동일)
         st.markdown("#### 👤 기본 정보")
+        company_name = (st.text_input("🏢 기업명 (필수)", placeholder="유아플랜") or "").strip()
         name = (st.text_input("성함 (필수)", placeholder="홍길동", key="name_input") or "").strip()
         phone_raw = st.text_input("연락처 (필수)", key="phone_input", placeholder="010-0000-0000")
         st.caption("숫자만 입력해 주세요. 제출 시 '010-0000-0000' 형식으로 자동 정리됩니다.")
@@ -353,6 +354,9 @@ def main():
             revenue_y2 = st.text_input(f"{current_year - 1}년 매출액", placeholder="예: 3500")
         with col_y3:
             revenue_y3 = st.text_input(f"{current_year - 2}년 매출액", placeholder="예: 2000")
+        # 자본금(선택)/부채(필수)
+        capital_amount = st.text_input("💰 자본금 규모 (선택, 단위: 만원)", placeholder="예: 5000")
+        debt_amount = st.text_input("💸 현재 부채 규모 (단위: 만원)", placeholder="예: 2000")
         st.markdown("---")
 
         # C. 기술·인증/IP
@@ -360,6 +364,11 @@ def main():
         ip_options = ["특허 보유", "실용신안 보유", "디자인 등록 보유", "해당 없음"]
         ip_status = st.multiselect("지식재산권 보유 여부", ip_options, placeholder="선택하세요")
         research_lab_status = st.radio("기업부설연구소/연구전담부서 보유 여부", ["보유", "미보유"], horizontal=True)
+        official_certs = st.multiselect(
+            "보유하고 있는 공식 인증",
+            ["벤처기업 인증", "이노비즈 인증", "메인비즈 인증", "해당 없음"],
+            placeholder="선택하세요"
+        )
         st.markdown("---")
 
         # D. 자금 수요/우대
@@ -367,7 +376,7 @@ def main():
         funding_purpose_options = ["시설자금", "운전자금", "기타"]
         funding_purpose = st.multiselect("필요 자금 용도", funding_purpose_options, placeholder="선택하세요")
         incentive_options = ["청년 대표", "여성 기업", "수출 실적 보유", "해당 없음"]
-        incentive_status = st.multiselect("해당하는 우대 조건", incentive_options, placeholder="선택하세요")
+        incentive_status = st.multiselect("해당하는 우대 조건 (필수)", incentive_options, placeholder="선택하세요")
         detailed_funding = st.text_area("필요 자금 상세 금액 또는 설명", placeholder="예: 기계 장비 도입에 2억 원, 인건비 5천만 원")
         st.markdown("---")
         
@@ -409,8 +418,14 @@ def main():
                 normalized_phone = raw_phone  # 형식이 달라도 그대로 저장(2차: 보조 자료라 관대하게)
             
             # 유효성 검사
-            if not name or not biz_reg_no or not privacy_agree:
-                st.error("성함, 사업자등록번호, 개인정보 동의는 필수입니다.")
+            if (not company_name 
+                or not name 
+                or not normalized_phone 
+                or not biz_reg_no 
+                or not debt_amount 
+                or not incentive_status 
+                or not privacy_agree):
+                st.error("기업명, 성함, 연락처, 사업자등록번호, 부채, 우대조건, 개인정보 동의는 필수입니다.")
                 st.session_state.submitted = False
             else:
                 with st.spinner("정보를 제출하고 있습니다..."):
@@ -420,13 +435,17 @@ def main():
                         'name': name,
                         'phone': normalized_phone,
                         'email': email,
+                        'business_name': company_name,
                         'biz_reg_no': biz_reg_no_formatted,
                         'startup_date': startup_date.strftime('%Y-%m'),
                         'revenue_y1': revenue_y1,
                         'revenue_y2': revenue_y2,
                         'revenue_y3': revenue_y3,
+                        'capital_amount': capital_amount,
+                        'debt_amount': debt_amount,
                         'ip_status': ', '.join(ip_status) if ip_status else '해당 없음',
                         'research_lab_status': research_lab_status,
+                        'official_certs': ', '.join(official_certs) if official_certs else '해당 없음',
                         'funding_purpose': ', '.join(funding_purpose) if funding_purpose else '미입력',
                         'incentive_status': ', '.join(incentive_status) if incentive_status else '해당 없음',
                         'detailed_funding': detailed_funding,
