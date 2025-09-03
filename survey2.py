@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 from datetime import datetime
 import re
 import random
@@ -23,6 +22,11 @@ def format_biz_no(d: str) -> str:
     if len(d) == 10:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
+
+def _phone_on_change():
+    raw = st.session_state.get("phone_input_2", "")
+    d = _digits_only(raw)
+    st.session_state["phone_input_2"] = format_phone_from_digits(d)
 
 # 사업자번호 입력 시 숫자만 허용하고 10자리일 때 자동 하이픈 적용
 def on_change_biz_reg_no():
@@ -245,6 +249,8 @@ def main():
     # 세션 상태 초기화 (사업자번호)
     if "biz_reg_no" not in st.session_state:
         st.session_state["biz_reg_no"] = ""
+    if "phone_input_2" not in st.session_state:
+        st.session_state["phone_input_2"] = ""
     
     with st.form("second_survey"):
         if 'submitted' not in st.session_state:
@@ -255,8 +261,13 @@ def main():
         # A. 기본 정보 (필수 우선)
         st.markdown("#### 👤 기본 정보 (필수)")
         name = st.text_input("성함 (필수)", placeholder="홍길동").strip()
-        phone_raw = st.text_input("연락처 (필수)", placeholder="01000000000", help="숫자만 입력하면 자동으로 하이픈(-)이 적용됩니다.")
-        st.caption("숫자만 입력하세요. 자동으로 하이픈이 추가됩니다.")
+        st.text_input(
+            "연락처 (필수)",
+            key="phone_input_2",
+            placeholder="010-0000-0000",
+            help="숫자만 입력하면 자동으로 하이픈(-)이 적용됩니다.",
+            on_change=_phone_on_change,
+        )
         # 사업자등록번호: 숫자만 입력해도 자동 하이픈
         biz_reg_no = st.text_input(
             "사업자등록번호 (필수)",
@@ -267,9 +278,10 @@ def main():
         )
         col1, col2 = st.columns(2)
         with col1:
-            startup_date = st.date_input("사업 시작일 (필수)",
-                                         min_value=datetime(1900, 1, 1),
-                                         format="YYYY-MM-DD")
+            startup_date = st.date_input(
+                "사업 시작일 (필수)",
+                min_value=datetime(1900, 1, 1),
+            )
         with col2:
             st.write(" ")
         st.markdown("---")
@@ -335,18 +347,27 @@ def main():
         if submitted and not st.session_state.submitted:
             st.session_state.submitted = True
 
-            # 전화번호 포맷
-            digits = _digits_only(phone_raw)
-            formatted_phone = format_phone_from_digits(digits) if len(digits) == 11 else phone_raw
+            digits = _digits_only(st.session_state.get("phone_input_2", ""))
+            phone_valid = (len(digits) == 11 and digits.startswith("010"))
+            formatted_phone = format_phone_from_digits(digits) if phone_valid else st.session_state.get("phone_input_2", "")
 
             # 사업자번호는 세션상태에서 읽기 (자동포맷 반영)
             biz_reg_no = st.session_state.get("biz_reg_no", "")
             biz_digits = _digits_only(biz_reg_no)
             formatted_biz = format_biz_no(biz_digits) if len(biz_digits) == 10 else biz_reg_no
 
-            # 유효성 검사
-            if not all([name, formatted_phone, formatted_biz, privacy_agree]):
-                st.error("필수 항목을 모두 입력해주세요.")
+            biz_valid = (len(biz_digits) == 10)
+            if not name:
+                st.error("성함을 입력해주세요.")
+            if not phone_valid:
+                st.error("연락처는 010으로 시작하는 11자리여야 합니다. (예: 010-1234-5678)")
+            if not biz_valid:
+                st.error("사업자등록번호는 숫자 10자리여야 합니다. (예: 123-45-67890)")
+
+            # 유효성 검사 (엄격)
+            if not (name and phone_valid and biz_valid and privacy_agree):
+                if not privacy_agree:
+                    st.error("개인정보 수집·이용 동의가 필요합니다.")
                 st.session_state.submitted = False
             else:
                 with st.spinner("제출 중..."):
