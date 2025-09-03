@@ -24,7 +24,7 @@ def format_biz_no(d: str) -> str:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
 
-RELEASE_VERSION = "v3_stage2"
+RELEASE_VERSION = "v2025-09-03-1"
 
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwH8OKYidK3GRtcx5lTvvmih6iTidS0yhuoSu3DcWn8WPl_LZ6gBcnbZHvqDksDX7DD/exec"
 
@@ -146,20 +146,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Submit 버튼 강제 네이비 (1차와 동일)
+# Submit 버튼 강제 네이비 (통합 선택자)
 st.markdown("""
 <style>
   /* 제출 버튼 네이비 고정 */
   div[data-testid="stFormSubmitButton"] button,
-  button[kind="primary"] {
+  div[data-testid="stFormSubmitButton"] button *,
+  button[kind="primary"],
+  button[kind="primary"] * {
     background:#002855 !important;
     border:1px solid #002855 !important;
-    color:#ffffff !important;
-  }
-  
-  /* 버튼 내부 텍스트 흰색 */
-  div[data-testid="stFormSubmitButton"] button *,
-  button[kind="primary"] * {
     color:#ffffff !important;
     fill:#ffffff !important;
   }
@@ -370,6 +366,69 @@ def main():
                             </a>
                         </div>
                         """, unsafe_allow_html=True)
+
+                        # 5초 자동 복귀 + 머물기/바로가기 버튼 추가
+                        st.markdown("""
+                        <style>
+                        .auto-return-container {
+                            margin-top: 20px;
+                            padding: 15px;
+                            border: 1px solid #e1e5eb;
+                            border-radius: 8px;
+                            background: #fafafa;
+                            text-align: center;
+                            font-size: 14px;
+                            color: #333;
+                        }
+                        .auto-return-buttons {
+                            margin-top: 10px;
+                        }
+                        .auto-return-buttons button, .auto-return-buttons a {
+                            margin: 0 8px;
+                            padding: 8px 16px;
+                            border-radius: 6px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            text-decoration: none;
+                            color: #fff;
+                        }
+                        .btn-stay {
+                            background-color: #005BAC;
+                            border: none;
+                        }
+                        .btn-go {
+                            background-color: #FEE500;
+                            color: #3C1E1E;
+                            border: none;
+                        }
+                        </style>
+                        <div class="auto-return-container" id="autoReturnContainer">
+                            <div>5초 후에 이전 페이지로 자동 복귀합니다.</div>
+                            <div class="auto-return-buttons">
+                                <button class="btn-stay" id="btnStay">머물기</button>
+                                <a href="/" class="btn-go" target="_blank" rel="noopener noreferrer">홈으로 이동</a>
+                            </div>
+                        </div>
+                        <script>
+                        const container = document.getElementById('autoReturnContainer');
+                        const btnStay = document.getElementById('btnStay');
+                        let countdown = 5;
+                        let timer = setInterval(() => {
+                            countdown--;
+                            container.firstElementChild.textContent = countdown + '초 후에 이전 페이지로 자동 복귀합니다.';
+                            if(countdown <= 0) {
+                                clearInterval(timer);
+                                window.history.back();
+                            }
+                        }, 1000);
+                        btnStay.addEventListener('click', () => {
+                            clearInterval(timer);
+                            container.firstElementChild.textContent = '자동 복귀가 취소되었습니다.';
+                            btnStay.disabled = true;
+                        });
+                        </script>
+                        """, unsafe_allow_html=True)
+
                     else:
                         st.error("❌ 제출 실패. 다시 시도해주세요.")
                         st.session_state.submitted = False
