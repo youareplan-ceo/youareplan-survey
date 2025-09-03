@@ -117,10 +117,17 @@ st.markdown("""
     box-shadow: 0 0 0 1000px #ffffff inset !important;
   }
 
+  /* placeholder 가독성 */
+  ::placeholder { color:#9aa0a6 !important; opacity:1 !important; }
+  input::placeholder, textarea::placeholder { color:#9aa0a6 !important; }
+
   /* 자동완성 배경 제거 */
-  input:-webkit-autofill {
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill{
     -webkit-text-fill-color:#111111 !important;
     box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
   }
 
   /* 체크박스 */
@@ -133,16 +140,26 @@ st.markdown("""
 
   /* 라이트 모드 강제 */
   :root { color-scheme: light; }
-  html, body, .stApp {
-    background: #ffffff !important;
-    color: #111111 !important;
-  }
+  html, body, .stApp { background: #ffffff !important; color: #111111 !important; }
+  [data-testid="stSidebar"] { background:#ffffff !important; color:#111111 !important; }
+  /* 텍스트/레이블 가독성 강화 */
+  .stMarkdown, .stText, label, p, h1, h2, h3, h4, h5, h6 { color:#111111 !important; }
 
   /* CTA 버튼 */
   .cta-wrap{margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fafafa}
   .cta-btn{display:block;text-align:center;font-weight:700;text-decoration:none;padding:12px 16px;border-radius:10px}
   .cta-primary{background:#FEE500;color:#3C1E1E}
   .cta-secondary{background:#fff;color:#005BAC;border:1px solid #005BAC}
+
+  /* 모바일 드롭다운/키보드 충돌 완화 */
+  @media (max-width: 768px){
+    .stApp{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 220px) !important}
+    div[data-baseweb="popover"]{z-index:10000 !important}
+    div[data-baseweb="popover"] div[role="listbox"]{
+      max-height:38vh !important;
+      overscroll-behavior:contain;
+    }
+  }
 </style>
 """, unsafe_allow_html=True)
 
