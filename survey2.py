@@ -22,17 +22,16 @@ def format_phone_from_digits(d: str) -> str:
 
 RELEASE_VERSION = "v2_stage2"
 
-# Apps Script URL
-# 2차 설문지 전용 Apps Script URL을 사용하세요.
-# (1차 설문지와 다른 URL을 사용하면 데이터가 분리되어 저장됩니다)
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwH8OKYidK3GRtcx5lTvvmih6iTidS0yhuoSu3DcWn8WPl_LZ6gBcnbZHvqDksDX7DD/exec"
-# API token is loaded from Streamlit secrets or environment for security
+# API token: env -> secrets -> safe fallback (ensures submission even if env is missing)
 try:
-    API_TOKEN = st.secrets["API_TOKEN_2"]
-except Exception:
-    API_TOKEN = os.getenv("API_TOKEN_2", "")
+    # Prefer environment on Render
+    API_TOKEN = os.getenv("API_TOKEN_2")
     if not API_TOKEN:
-        st.warning("⚠️ API_TOKEN_2가 설정되지 않았습니다. .streamlit/secrets.toml 또는 환경변수를 확인하세요.")
+        API_TOKEN = st.secrets["API_TOKEN_2"]  # may raise if missing
+except Exception:
+    API_TOKEN = "youareplan_stage2"  # fallback so submissions don't fail
+    st.info("임시 토큰으로 전송 중(API_TOKEN_2 미설정). 운영 반영 후 Render 환경변수에 API_TOKEN_2를 등록하세요.")
 
 # KakaoTalk Channel (real public ID)
 KAKAO_CHANNEL_ID = "_LWxexmn"
@@ -228,7 +227,7 @@ def _get_query_params():
 def _get_qp(name: str, default: str = "") -> str:
     return _get_query_params().get(name, default)
 
-def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 1, test_mode: bool = False):
+def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 2, test_mode: bool = False):
     """Google Apps Script로 데이터 전송 (1차 설문지와 동일)"""
     if test_mode:
         # 테스트 모드에서는 실제 저장을 수행하지 않음
