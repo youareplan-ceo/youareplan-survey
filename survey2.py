@@ -400,7 +400,8 @@ def main():
                         'credit_status': credit_status,
                         'business_status': business_status,
                         'privacy_agree': privacy_agree,
-                        'marketing_agree': marketing_agree
+                        'marketing_agree': marketing_agree,
+                        'release_version': RELEASE_VERSION
                     }
                     
                     # Google Apps Script로 데이터 전송
