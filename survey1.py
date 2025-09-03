@@ -197,16 +197,28 @@ st.markdown("""
 
   /* 연락처 자동 포맷 안내 텍스트 여백 정리 */
   .phone-help{margin-top:4px;color:#6b7280;font-size:12px}
-  /* === 모바일 드롭다운/키보드 충돌 완화 === */
-  @media (max-width: 768px){
-    /* iOS 하단 키보드가 셀렉트 리스트를 가리는 현상 방지 */
-    .stApp{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 220px) !important}
-    /* BaseWeb popover 높이 제한 + 스크롤 가능 + 항상 위에 표시 */
-    div[data-baseweb="popover"]{z-index:10000 !important}
-    div[data-baseweb="popover"] div[role="listbox"]{
-      max-height:38vh !important;
-      overscroll-behavior:contain;
-    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- Force primary button color to navy across Streamlit themes (strong selectors) ---
+st.markdown("""
+<style>
+  :root { --primary-color:#002855 !important; } /* Streamlit theme primary */
+
+  /* Strong selectors to win against built-in button theming */
+  button[kind="primary"],
+  button[data-testid="baseButton-primary"],
+  .stButton > button[kind="primary"],
+  .stButton button[kind="primary"]{
+    background:#002855 !important;
+    border:1px solid #002855 !important;
+    color:#ffffff !important;
+    box-shadow:none !important;
+  }
+  button[kind="primary"]:hover,
+  button[data-testid="baseButton-primary"]:hover,
+  .stButton > button[kind="primary"]:hover{
+    filter: brightness(0.95) !important;
   }
 </style>
 """, unsafe_allow_html=True)
