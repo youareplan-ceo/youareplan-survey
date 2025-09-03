@@ -44,57 +44,30 @@ KAKAO_CHAT_URL = f"{KAKAO_CHANNEL_URL}/chat"
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-  html, body, [class*="css"]  { font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif; }
-  :root { --gov-navy:#002855; --gov-blue:#005BAC; --gov-gray:#f5f7fa; --gov-border:#e1e5eb; --gov-danger:#D32F2F; --primary-color:#002855 !important; }
-  .notranslate,[translate="no"]{ translate: no !important; } .stApp * { translate: no !important; }
-
+  html, body, .stApp { font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif; background:#ffffff !important; color:#111111 !important; }
+  :root { --gov-navy:#002855; --gov-blue:#005BAC; --gov-gray:#f5f7fa; --gov-border:#e1e5eb; --gov-danger:#D32F2F; }
   /* 사이드바 숨김 */
   [data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none !important; }
-
   /* 헤더 */
   .gov-topbar{ width:100%; background:var(--gov-navy); color:#fff; font-size:13px; padding:8px 14px; letter-spacing:0.2px; border-bottom:3px solid var(--gov-blue); }
   .gov-hero{ padding:16px 0 8px 0; border-bottom:1px solid var(--gov-border); margin-bottom:8px; }
   .gov-hero h2{ color:var(--gov-navy); margin:0 0 6px 0; font-weight:700; }
   .gov-hero p{ color:#4b5563; margin:0; }
-
-  /* 버튼 통일 */
-  div[data-testid="stFormSubmitButton"] button,
-  div[data-testid="stFormSubmitButton"] button *,
-  button[kind="primary"],
-  button[kind="primary"] * {
-    background:#002855 !important;
-    border:1px solid #002855 !important;
-    color:#ffffff !important;
-    fill:#ffffff !important;
-    box-shadow:none !important;
-  }
+  /* 제출 버튼(텍스트/아이콘까지) 네이비 고정 */
+  div[data-testid="stFormSubmitButton"] button { background:#002855 !important; border:1px solid #002855 !important; color:#ffffff !important; box-shadow:none !important; }
+  div[data-testid="stFormSubmitButton"] button * { color:#ffffff !important; fill:#ffffff !important; }
   div[data-testid="stFormSubmitButton"] button:hover{ filter:brightness(0.95) !important; }
-
-  /* 입력창 테마 */
-  .stTextInput > div > div > input,
+  /* 입력 요소 베이스 스타일만 가볍게 */
+  .stTextInput input,
   .stSelectbox > div > div,
   .stMultiSelect > div > div,
-  .stTextArea > div > div > textarea{
-    border:1px solid var(--gov-border) !important; border-radius:6px !important; background:#ffffff !important;
-    box-shadow: 0 1px 2px rgba(16,24,40,.04) !important;
-  }
+  .stTextArea textarea { border:1px solid var(--gov-border) !important; border-radius:6px !important; background:#ffffff !important; }
   input:-webkit-autofill{ -webkit-text-fill-color:#111 !important; box-shadow: 0 0 0px 1000px #fff inset !important; }
-  .stCheckbox{ padding:12px 14px !important; border:1px solid var(--gov-border) !important; border-radius:8px !important; background:#fff !important; }
-
-  /* 라이트 모드 강제 */
-  :root{ color-scheme: light; } html, body, .stApp { background:#ffffff !important; color:#111111 !important; }
-
+  .stCheckbox { padding:12px 14px !important; border:1px solid var(--gov-border) !important; border-radius:8px !important; background:#fff !important; }
   /* CTA */
   .cta-wrap{margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fafafa}
   .cta-btn{display:block;text-align:center;font-weight:700;text-decoration:none;padding:12px 16px;border-radius:10px}
   .cta-primary{background:#FEE500;color:#3C1E1E}
-
-  /* 모바일 드롭다운/키보드 충돌 완화 */
-  @media (max-width: 768px){
-    .stApp{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 220px) !important}
-    div[data-baseweb="popover"]{z-index:10000 !important}
-    div[data-baseweb="popover"] div[role="listbox"]{max-height:38vh !important; overscroll-behavior:contain;}
-  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -206,7 +179,7 @@ def main():
         st.markdown("#### 💡 기술·인증 보유 (선택)")
         ip_options = ["특허 보유", "실용신안 보유", "디자인 등록 보유", "해당 없음"]
         ip_status = st.multiselect("지식재산권", ip_options, key="ip_status_2", placeholder="선택하세요")
-        research_lab = st.radio("기업부설연구소", ["보유", "미보유"], key="research_lab_2", horizontal=True)
+        research_lab = st.radio("기업부설연구소", ["보유", "미보유"], index=1, key="research_lab_2", horizontal=True)
         st.markdown("---")
 
         st.markdown("#### 💵 자금 활용 계획 (선택)")
@@ -222,7 +195,7 @@ def main():
         with col_agree2:
             marketing_agree = st.checkbox("마케팅 정보 수신 동의 (선택)", key="marketing_agree_2")
 
-        submitted = st.form_submit_button("📩 2차 설문 제출")
+        submitted = st.form_submit_button("📩 2차 설문 제출", type="primary")
 
         if submitted and not st.session_state.get("submitted_2", False):
             st.session_state["submitted_2"] = True
