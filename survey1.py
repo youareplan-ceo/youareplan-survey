@@ -24,7 +24,7 @@ def _phone_on_change():
     d = _digits_only(raw)
     st.session_state.phone_input = format_phone_from_digits(d)
 
-RELEASE_VERSION = "v7"
+RELEASE_VERSION = "v2025-09-03-1"
 
 # Apps Script URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec"
@@ -173,6 +173,49 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- 강제: 제출 버튼/아이콘 텍스트 항상 흰색 & 기본 프라이머리 색상 고정 ---
+st.markdown("""
+<style>
+  :root { --primary-color:#002855 !important; } /* Streamlit theme primary */
+
+  button[kind="primary"],
+  button[data-testid="baseButton-primary"],
+  .stButton > button[kind="primary"],
+  .stButton button[kind="primary"],
+  div[data-testid="stFormSubmitButton"] button,
+  div[data-testid="stFormSubmitButton"] > button {
+    background:#002855 !important;
+    border:1px solid #002855 !important;
+    color:#ffffff !important;
+    box-shadow:none !important;
+  }
+
+  div[data-testid="stFormSubmitButton"] button *,
+  .stButton > button[kind="primary"] *,
+  button[kind="primary"] *,
+  button[data-testid="baseButton-primary"] * {
+    color:#ffffff !important;
+    fill:#ffffff !important;
+  }
+
+  div[data-testid="stFormSubmitButton"] button:focus *,
+  div[data-testid="stFormSubmitButton"] button:active *,
+  .stButton > button[kind="primary"]:focus *,
+  .stButton > button[kind="primary"]:active * {
+    color:#ffffff !important;
+    fill:#ffffff !important;
+  }
+
+  button[kind="primary"]:hover,
+  button[data-testid="baseButton-primary"]:hover,
+  .stButton > button[kind="primary"]:hover,
+  div[data-testid="stFormSubmitButton"] button:hover,
+  div[data-testid="stFormSubmitButton"] > button:hover {
+    filter: brightness(0.95) !important;
+  }
+</style>
+""", unsafe_allow_html=True)
+
 def _get_query_params():
     """쿼리 파라미터 가져오기"""
     try:
@@ -185,7 +228,7 @@ def _get_query_params():
 def _get_qp(name: str, default: str = "") -> str:
     return _get_query_params().get(name, default)
 
-def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 1, test_mode: bool = False):
+def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 2, test_mode: bool = False):
     """Google Apps Script로 데이터 전송"""
     if test_mode:
         return {"status": "test", "message": "테스트 모드 - 저장 생략"}
@@ -337,7 +380,7 @@ def main():
             marketing_agree = st.checkbox("마케팅 정보 수신 동의 (선택)")
             st.caption("신규 정책자금 알림. 언제든 거부 가능.")
 
-        submitted = st.form_submit_button("📩 정책자금 상담 신청")
+        submitted = st.form_submit_button("📩 정책자금 상담 신청", type="primary")
         
         if submitted and not st.session_state.submitted:
             st.session_state.submitted = True
@@ -396,6 +439,85 @@ def main():
                             </a>
                         </div>
                         """, unsafe_allow_html=True)
+                        
+                        # --- 제출 후 5초 카운트다운 → 뒤로가기/머물기/즉시 이동 ---
+                        st.markdown(
+                            """
+<div id="auto-return-wrap" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fff;">
+  <div id="auto-return-msg" style="color:#374151;margin-bottom:8px;line-height:1.5;">
+    <strong style="color:#111;">안내:</strong> <span style="color:#111;">이 창은</span>
+    <strong><span id="countdown">5</span>초</strong> 후 이전 화면으로 자동 이동합니다.
+    필요하시면 아래 버튼으로 자동 이동을 취소하실 수 있어요.
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a class="cta-btn cta-secondary" id="stay-here-btn" href="#" onclick="window.__stayHere=true;return false;" aria-label="자동 이동 취소">
+      ⏸️ 이 창에 머물기
+    </a>
+    <a class="cta-btn cta-primary" id="go-now-btn" href="#" onclick="(function(){try{window.__forceGoNow=true;}catch(e){}})();return false;" aria-label="지금 바로 이전 화면으로 이동">
+      🔙 지금 바로 돌아가기
+    </a>
+  </div>
+</div>
+<script>
+(function(){
+  var live = document.createElement('div');
+  live.setAttribute('aria-live','polite');
+  live.setAttribute('aria-atomic','true');
+  live.style.position='absolute';
+  live.style.left='-9999px';
+  document.body.appendChild(live);
+  function updateLive(msg){ try{ live.textContent = msg; }catch(e){} }
+
+  function goBack(){
+    if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+    if (history.length > 1) { history.back(); return; }
+    try {
+      var q = new URLSearchParams(location.search);
+      var ret = q.get('return_to');
+      if (ret) { location.replace(ret); return; }
+    } catch(e) {}
+    location.replace('/');
+  }
+
+  var left = 5;
+  var el = document.getElementById('countdown');
+
+  var goNow = document.getElementById('go-now-btn');
+  if (goNow){
+    goNow.addEventListener('click', function(e){
+      e.preventDefault();
+      goBack();
+    });
+  }
+
+  var timer = setInterval(function(){
+    if (window.__stayHere === true) {
+      clearInterval(timer);
+      var msg = document.getElementById('auto-return-msg');
+      if (msg){ msg.innerHTML = '자동 이동이 취소되었습니다. 필요 시 상단의 링크 또는 브라우저 뒤로가기를 이용해 주세요.'; }
+      updateLive('자동 이동이 취소되었습니다.');
+      return;
+    }
+    if (window.__forceGoNow === true) {
+      clearInterval(timer);
+      goBack();
+      return;
+    }
+    left -= 1;
+    if (left <= 0){
+      clearInterval(timer);
+      goBack();
+    } else {
+      if (el) { el.textContent = left; updateLive(left + '초 남았습니다.'); }
+    }
+  }, 1000);
+
+  updateLive('5초 후 이전 화면으로 이동합니다.');
+})();
+</script>
+                            """,
+                            unsafe_allow_html=True,
+                        )
                     else:
                         st.error("❌ 신청 실패. 다시 시도해주세요.")
                         st.session_state.submitted = False
