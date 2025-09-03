@@ -198,6 +198,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+  /* --- Strong visibility overrides for inputs/labels (iOS/dark-mode safe) --- */
+  .stTextInput input,
+  .stTextArea textarea,
+  .stDateInput input,
+  div[data-baseweb="select"] input,
+  div[data-baseweb="select"] * { color:#111111 !important; }
+  input, textarea { -webkit-text-fill-color:#111111 !important; color:#111111 !important; }
+
+  /* Soften container shadow */
+  .stTextInput > div > div,
+  .stSelectbox > div > div,
+  .stMultiSelect > div > div,
+  .stTextArea > div > div { box-shadow:0 1px 1px rgba(16,24,40,.06) !important; }
+</style>
+""", unsafe_allow_html=True)
+
 def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 2, test_mode: bool = False):
     """Google Apps Script로 데이터 전송"""
     if test_mode:
@@ -257,15 +275,52 @@ def main():
         
         # A. 기본 정보
         st.markdown("#### 👤 기본 정보")
-        name = st.text_input("성함 (필수)", placeholder="홍길동").strip()
-        phone_raw = st.text_input("연락처 (필수)", placeholder="010-0000-0000")
+        name = st.text_input("성함 (필수)", placeholder="홍길동", key="name_input").strip()
+        phone_raw = st.text_input("연락처 (필수)", placeholder="010-0000-0000", key="phone_input")
         st.caption("숫자만 입력하세요. 자동으로 하이픈이 추가됩니다.")
-        email = st.text_input("이메일 (선택)", placeholder="email@example.com")
+        email = st.text_input("이메일 (선택)", placeholder="email@example.com", key="email_input")
+
+        st.markdown(
+            """
+            <script>
+            (function(){
+              function digitsOnly(s){ return (s||"").replace(/[^0-9]/g, ""); }
+              function fmtPhone(d){
+                if(d.startsWith("010")){
+                  if(d.length <= 7) return d.slice(0,3)+"-"+d.slice(3);
+                  return d.slice(0,3)+"-"+d.slice(3,7)+"-"+d.slice(7,11);
+                }
+                return d; // non-010은 그대로 둠
+              }
+              function fmtBiz(d){
+                if(d.length <= 3) return d;
+                if(d.length <= 5) return d.slice(0,3)+"-"+d.slice(3);
+                return d.slice(0,3)+"-"+d.slice(3,5)+"-"+d.slice(5,10);
+              }
+              function bindByAria(label, formatter){
+                var el = document.querySelector('input[aria-label="'+label+'"]');
+                if(!el) return;
+                // Force visible text color (iOS dark-mode safety)
+                el.style.color = '#111';
+                el.style.webkitTextFillColor = '#111';
+                el.addEventListener('input', function(){
+                  var d = digitsOnly(el.value);
+                  el.value = formatter(d);
+                }, {passive:true});
+              }
+              bindByAria('연락처 (필수)', fmtPhone);
+              bindByAria('사업자등록번호 (필수)', fmtBiz);
+            })();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+        
         st.markdown("---")
         
         # B. 사업 정보
         st.markdown("#### 📊 사업 정보")
-        biz_reg_no = st.text_input("사업자등록번호 (필수)", placeholder="000-00-00000")
+        biz_reg_no = st.text_input("사업자등록번호 (필수)", placeholder="000-00-00000", key="biz_no_input")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -385,6 +440,23 @@ def main():
                             </a>
                         </div>
                         """, unsafe_allow_html=True)
+
+                        st.markdown(
+                            """
+                            <script>
+                              (function(){
+                                setTimeout(function(){
+                                  try{
+                                    if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+                                    if (history.length > 1) { history.back(); return; }
+                                  }catch(e){}
+                                  location.replace('/');
+                                }, 1200);
+                              })();
+                            </script>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
                     else:
                         st.error("❌ 제출 실패. 다시 시도해주세요.")
