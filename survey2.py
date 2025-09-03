@@ -220,13 +220,12 @@ st.markdown("""
 # Inserted Streamlit primary button color override (navy)
 st.markdown("""
 <style>
-  :root {
-    --primary-color:#002855 !important;  /* force Streamlit theme primary */
-  }
-  /* Force primary buttons to navy (Streamlit kinds) */
+  :root { --primary-color:#002855 !important; }
+  /* Generic buttons */
   .stButton > button,
   button[kind="primary"],
-  button[data-testid="baseButton-primary"]{
+  button[data-testid="baseButton-primary"],
+  button[data-testid="baseButton-secondary"]{
     background:#002855 !important;
     color:#ffffff !important;
     border:1px solid #002855 !important;
@@ -236,8 +235,15 @@ st.markdown("""
   }
   .stButton > button:hover,
   button[kind="primary"]:hover,
-  button[data-testid="baseButton-primary"]:hover{
+  button[data-testid="baseButton-primary"]:hover,
+  button[data-testid="baseButton-secondary"]:hover{
     filter:brightness(0.95);
+  }
+  /* Strongest rule for form submit buttons */
+  div[data-testid="stFormSubmitButton"] button{
+    background:#002855 !important;
+    color:#ffffff !important;
+    border:1px solid #002855 !important;
   }
 </style>
 """, unsafe_allow_html=True)
