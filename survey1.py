@@ -55,7 +55,7 @@ st.markdown("""
     --gov-navy:#002855;
     --gov-blue:#005BAC;
     --gov-gray:#f5f7fa;
-    --gov-border:#e1e5eb;
+    --gov-border:#d7dce3;
     --gov-danger:#D32F2F;
     --primary-color:#002855 !important;
   }
@@ -114,7 +114,7 @@ st.markdown("""
     border:1px solid var(--gov-border) !important;
     border-radius:6px !important;
     background:#ffffff !important;
-    box-shadow: 0 0 0 1000px #ffffff inset !important;
+    box-shadow: none !important;
     color:#111111 !important;           /* ← 텍스트 검정 고정 */
     caret-color:#111111 !important;      /* ← 커서 색상 고정 */
   }
@@ -143,6 +143,15 @@ st.markdown("""
     color:#111111 !important;
     caret-color:#111111 !important;
     -webkit-text-fill-color:#111111 !important; /* Safari */
+  }
+
+  /* Reduce overall input outline darkness */
+  .stTextInput > div > div,
+  .stSelectbox > div,
+  .stMultiSelect > div,
+  .stTextArea > div {
+    border-color: var(--gov-border) !important;
+    box-shadow: none !important;
   }
 
   /* placeholder 가독성 */
@@ -481,27 +490,19 @@ def main():
                         st.markdown(
                             """
 <div id="auto-exit-note" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#f5f7fa;color:#111;">
-  제출이 완료되었습니다. <strong><span id="exit_count">5</span>초</strong> 후 이전 화면으로 이동해요.
+  제출이 완료되었습니다. <strong><span id="exit_count">3</span>초</strong> 후 이전 화면으로 이동합니다.
 </div>
 <script>
 (function(){
-  function goBack(){
-    try {
-      if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
-      if (history.length > 1) { history.back(); return; }
-      var q = new URLSearchParams(location.search);
-      var ret = q.get('return_to');
-      if (ret) { location.replace(ret); return; }
-    } catch(e) {}
+  function go(){
+    try{ if(history.length > 1){ history.back(); return; } }catch(e){}
+    try{ var q=new URLSearchParams(location.search); var ret=q.get('return_to'); if(ret){ location.replace(ret); return; } }catch(e){}
     location.replace('/');
   }
-  var left = 5;
-  var el = document.getElementById('exit_count');
-  var t = setInterval(function(){
-    left -= 1;
-    if (left <= 0){ clearInterval(t); goBack(); }
-    else if (el) { el.textContent = left; }
-  }, 1000);
+  var left=3, el=document.getElementById('exit_count');
+  var t=setInterval(function(){ left--; if(el){ el.textContent=left; } if(left<=0){ clearInterval(t); go(); } }, 1000);
+  // Hard fallback in case intervals are throttled
+  setTimeout(go, 3500);
 })();
 </script>
 """,

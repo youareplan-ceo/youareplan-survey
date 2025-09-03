@@ -22,11 +22,11 @@ def format_biz_no(d: str) -> str:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
 
-RELEASE_VERSION = "v2025-09-03-emergency-fix"
+RELEASE_VERSION = "v2025-09-03-clean-fix"
 
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwH8OKYidK3GRtcx5lTvvmih6iTidS0yhuoSu3DcWn8WPl_LZ6gBcnbZHvqDksDX7DD/exec"
 
-# API token with fallback (안전하게 처리)
+# API token with fallback
 try:
     API_TOKEN = os.getenv("API_TOKEN_2")
     if not API_TOKEN:
@@ -39,180 +39,125 @@ KAKAO_CHANNEL_ID = "_LWxexmn"
 KAKAO_CHANNEL_URL = f"https://pf.kakao.com/{KAKAO_CHANNEL_ID}"
 KAKAO_CHAT_URL = f"{KAKAO_CHANNEL_URL}/chat"
 
-# 안전한 CSS (분리해서 적용)
+# 통합 CSS (단일 블록으로 정리)
 st.markdown("""
 <style>
-  /* 폰트 */
+  /* 기본 폰트 및 색상 */
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-  html, body, [class*="css"]  {
+  html, body, [class*="css"] {
     font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
   }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
+  
   /* 색상 변수 */
   :root {
-    --gov-navy:#002855;
-    --gov-blue:#005BAC;
-    --gov-gray:#f5f7fa;
-    --gov-border:#e1e5eb;
-    --gov-danger:#D32F2F;
-    --primary-color:#002855 !important;
+    --gov-navy: #002855;
+    --gov-blue: #005BAC;
+    --gov-border: #e1e5eb;
+    --primary-color: #002855 !important;
   }
   
   /* 사이드바 숨김 */
   [data-testid="stSidebar"] { display: none !important; }
   [data-testid="collapsedControl"] { display: none !important; }
-
-  /* 번역 차단 및 링크 색상 */
-  .notranslate,[translate="no"]{ translate: no !important; }
+  
+  /* 번역 차단 */
+  .notranslate, [translate="no"] { translate: no !important; }
   .stApp * { translate: no !important; }
-  a { color: var(--gov-blue) !important; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
+  
   /* 헤더 */
-  .gov-topbar{
-    width:100%;
-    background:var(--gov-navy);
-    color:#fff;
-    font-size:13px;
-    padding:8px 14px;
-    letter-spacing:0.2px;
-    border-bottom:3px solid var(--gov-blue);
+  .gov-topbar {
+    width: 100%;
+    background: var(--gov-navy);
+    color: #fff;
+    font-size: 13px;
+    padding: 8px 14px;
+    letter-spacing: 0.2px;
+    border-bottom: 3px solid var(--gov-blue);
   }
-  .gov-hero{
-    padding:16px 0 8px 0;
-    border-bottom:1px solid var(--gov-border);
-    margin-bottom:8px;
+  
+  .gov-hero {
+    padding: 16px 0 8px 0;
+    border-bottom: 1px solid var(--gov-border);
+    margin-bottom: 8px;
   }
-  .gov-hero h2{
-    color:var(--gov-navy);
-    margin:0 0 6px 0;
-    font-weight:700;
+  
+  .gov-hero h2 {
+    color: var(--gov-navy);
+    margin: 0 0 6px 0;
+    font-weight: 700;
   }
-  .gov-hero p{
-    color:#4b5563;
-    margin:0;
+  
+  .gov-hero p {
+    color: #4b5563;
+    margin: 0;
   }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-  /* 제출 버튼: 네이비 고정 + 텍스트/아이콘 흰색 강제 (모든 상태) */
-  button[kind="primary"],
-  button[data-testid="baseButton-primary"],
-  .stButton > button[kind="primary"],
-  div[data-testid="stFormSubmitButton"] button,
-  div[data-testid="stFormSubmitButton"] > button {
-    background:#002855 !important;
-    border:1px solid #002855 !important;
-    color:#ffffff !important;
-    box-shadow:none !important;
+  
+  /* 제출 버튼 */
+  div[data-testid="stFormSubmitButton"] button {
+    background: #002855 !important;
+    border: 1px solid #002855 !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 6px;
   }
-  /* 버튼 내부의 모든 자식 텍스트/아이콘 흰색 유지 */
-  div[data-testid="stFormSubmitButton"] button *,
-  .stButton > button[kind="primary"] *,
-  button[kind="primary"] *,
-  button[data-testid="baseButton-primary"] * {
-    color:#ffffff !important;
-    fill:#ffffff !important;
+  
+  div[data-testid="stFormSubmitButton"] button * {
+    color: #ffffff !important;
+    fill: #ffffff !important;
   }
-  /* hover/active/focus 도 동일 톤 유지 */
-  button[kind="primary"]:hover,
-  button[data-testid="baseButton-primary"]:hover,
-  .stButton > button[kind="primary"]:hover,
-  div[data-testid="stFormSubmitButton"] button:hover,
-  div[data-testid="stFormSubmitButton"] button:active,
-  div[data-testid="stFormSubmitButton"] button:focus {
-    background:#002855 !important;
-    border-color:#002855 !important;
-    color:#ffffff !important;
-    filter:brightness(0.95) !important;
+  
+  div[data-testid="stFormSubmitButton"] button:hover {
+    background: #001a3a !important;
+    filter: brightness(0.95);
   }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-  /* 입력창 내부 input/textarea 자체 */
+  
+  /* 입력창 */
   .stTextInput > div > div > input,
-  .stTextArea > div > div > textarea,
-  .stDateInput > div > div input {
-    border:1px solid var(--gov-border) !important;
-    border-radius:6px !important;
-    background:#ffffff !important;
-    color:#111111 !important;
-  }
-
-  /* 선택 위젯(BaseWeb) 컨테이너 */
   .stSelectbox > div > div,
   .stMultiSelect > div > div,
-  .stDateInput > div > div,
-  .stTextInput > div > div,
-  .stTextArea > div > div {
-    background:#ffffff !important;
-    border:1px solid var(--gov-border) !important;
-    border-radius:6px !important;
-    box-shadow:0 1px 2px rgba(16,24,40,.04) !important;
+  .stTextArea > div > div > textarea,
+  .stDateInput > div > div > input {
+    border: 1px solid var(--gov-border) !important;
+    border-radius: 6px !important;
+    background: #ffffff !important;
+    color: #111111 !important;
   }
-
-  /* BaseWeb 드롭다운 본체 (모바일 키보드와 겹침 방지 포함) */
-  div[data-baseweb="select"] > div {
-    background:#ffffff !important;
-    color:#111111 !important;
-  }
-  @media (max-width: 768px){
-    div[data-baseweb="popover"]{z-index:10000 !important}
-    div[data-baseweb="popover"] div[role="listbox"]{max-height:38vh !important;overscroll-behavior:contain}
-  }
-
-  /* placeholder 가독성 */
-  ::placeholder, input::placeholder, textarea::placeholder { color:#9aa0a6 !important; opacity:1 !important; }
-
-  /* iOS/Chrome 자동완성 노란 배경 덮기 */
-  input:-webkit-autofill,
-  textarea:-webkit-autofill,
-  select:-webkit-autofill {
-    -webkit-text-fill-color:#111111 !important;
-    box-shadow:0 0 0px 1000px #ffffff inset !important;
-    transition: background-color 5000s ease-in-out 0s !important;
-  }
-
-  /* 체크박스 컨테이너 (동의 영역) */
+  
+  /* 체크박스 */
   .stCheckbox {
-    padding:12px 14px !important;
-    border:1px solid var(--gov-border) !important;
-    border-radius:8px !important;
-    background:#ffffff !important;
+    padding: 12px 14px !important;
+    border: 1px solid var(--gov-border) !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
   }
-
+  
   /* 라이트 모드 강제 */
   :root { color-scheme: light; }
-  html, body, .stApp { background:#ffffff !important; color:#111111 !important; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-  /* --- Strong visibility overrides for inputs/labels (iOS/dark-mode safe) --- */
-  .stTextInput input,
-  .stTextArea textarea,
-  .stDateInput input,
-  div[data-baseweb="select"] input,
-  div[data-baseweb="select"] * { color:#111111 !important; }
-  input, textarea { -webkit-text-fill-color:#111111 !important; color:#111111 !important; }
-
-  /* Soften container shadow */
-  .stTextInput > div > div,
-  .stSelectbox > div > div,
-  .stMultiSelect > div > div,
-  .stTextArea > div > div { box-shadow:0 1px 1px rgba(16,24,40,.06) !important; }
+  html, body, .stApp {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  
+  /* CTA 버튼 */
+  .cta-wrap {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--gov-border);
+    border-radius: 8px;
+    background: #fafafa;
+  }
+  
+  .cta-btn {
+    display: block;
+    text-align: center;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: #FEE500;
+    color: #3C1E1E;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -258,7 +203,7 @@ def main():
     
     st.markdown("##### 맞춤형 정책자금 매칭을 위해 상세 정보를 입력해주세요.")
 
-    # 쿼리 파라미터 (안전하게 처리)
+    # 쿼리 파라미터 안전 처리
     try:
         qp = st.query_params
         is_test_mode = qp.get("test") == "true"
@@ -271,56 +216,22 @@ def main():
     st.info("✔ 1차 상담 후 진행하는 **심화 진단** 절차입니다.")
     
     with st.form("second_survey"):
+        if 'submitted_2' not in st.session_state:
+            st.session_state.submitted_2 = False
+            
         st.markdown("### 📝 2차 설문 - 상세 정보")
         
         # A. 기본 정보
         st.markdown("#### 👤 기본 정보")
-        name = st.text_input("성함 (필수)", placeholder="홍길동", key="name_input").strip()
-        phone_raw = st.text_input("연락처 (필수)", placeholder="010-0000-0000", key="phone_input")
+        name = st.text_input("성함 (필수)", placeholder="홍길동").strip()
+        phone_raw = st.text_input("연락처 (필수)", placeholder="010-0000-0000")
         st.caption("숫자만 입력하세요. 자동으로 하이픈이 추가됩니다.")
-        email = st.text_input("이메일 (선택)", placeholder="email@example.com", key="email_input")
-
-        st.markdown(
-            """
-            <script>
-            (function(){
-              function digitsOnly(s){ return (s||"").replace(/[^0-9]/g, ""); }
-              function fmtPhone(d){
-                if(d.startsWith("010")){
-                  if(d.length <= 7) return d.slice(0,3)+"-"+d.slice(3);
-                  return d.slice(0,3)+"-"+d.slice(3,7)+"-"+d.slice(7,11);
-                }
-                return d; // non-010은 그대로 둠
-              }
-              function fmtBiz(d){
-                if(d.length <= 3) return d;
-                if(d.length <= 5) return d.slice(0,3)+"-"+d.slice(3);
-                return d.slice(0,3)+"-"+d.slice(3,5)+"-"+d.slice(5,10);
-              }
-              function bindByAria(label, formatter){
-                var el = document.querySelector('input[aria-label="'+label+'"]');
-                if(!el) return;
-                // Force visible text color (iOS dark-mode safety)
-                el.style.color = '#111';
-                el.style.webkitTextFillColor = '#111';
-                el.addEventListener('input', function(){
-                  var d = digitsOnly(el.value);
-                  el.value = formatter(d);
-                }, {passive:true});
-              }
-              bindByAria('연락처 (필수)', fmtPhone);
-              bindByAria('사업자등록번호 (필수)', fmtBiz);
-            })();
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
-        
+        email = st.text_input("이메일 (선택)", placeholder="email@example.com")
         st.markdown("---")
         
         # B. 사업 정보
         st.markdown("#### 📊 사업 정보")
-        biz_reg_no = st.text_input("사업자등록번호 (필수)", placeholder="000-00-00000", key="biz_no_input")
+        biz_reg_no = st.text_input("사업자등록번호 (필수)", placeholder="000-00-00000")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -391,7 +302,9 @@ def main():
 
         submitted = st.form_submit_button("📩 2차 설문 제출")
 
-        if submitted:
+        if submitted and not st.session_state.submitted_2:
+            st.session_state.submitted_2 = True
+            
             # 전화번호 포맷
             digits = _digits_only(phone_raw)
             formatted_phone = format_phone_from_digits(digits) if len(digits) == 11 else phone_raw
@@ -403,6 +316,7 @@ def main():
             # 유효성 검사
             if not all([name, formatted_phone, formatted_biz, privacy_agree]):
                 st.error("필수 항목을 모두 입력해주세요.")
+                st.session_state.submitted_2 = False
             else:
                 with st.spinner("제출 중..."):
                     survey_data = {
@@ -433,33 +347,33 @@ def main():
                         st.info("전문가가 심층 분석 후 연락드립니다.")
                         
                         st.markdown(f"""
-                        <div style="margin-top:10px;padding:12px;border:1px solid #e1e5eb;border-radius:8px;background:#fafafa">
-                            <a href="{KAKAO_CHAT_URL}" target="_blank" 
-                               style="display:block;text-align:center;font-weight:700;text-decoration:none;padding:12px 16px;border-radius:10px;background:#FEE500;color:#3C1E1E">
+                        <div class="cta-wrap">
+                            <a class="cta-btn" href="{KAKAO_CHAT_URL}" target="_blank">
                                 💬 전문가에게 문의하기
                             </a>
                         </div>
                         """, unsafe_allow_html=True)
 
-                        st.markdown(
-                            """
-                            <script>
-                              (function(){
-                                setTimeout(function(){
-                                  try{
-                                    if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
-                                    if (history.length > 1) { history.back(); return; }
-                                  }catch(e){}
-                                  location.replace('/');
-                                }, 1200);
-                              })();
-                            </script>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                        # 1.2초 후 자동 복귀
+                        st.markdown("""
+                        <script>
+                        setTimeout(function(){
+                            if (document.referrer && document.referrer !== location.href) { 
+                                location.replace(document.referrer); 
+                                return; 
+                            }
+                            if (history.length > 1) { 
+                                history.back(); 
+                                return; 
+                            }
+                            location.replace('/');
+                        }, 1200);
+                        </script>
+                        """, unsafe_allow_html=True)
 
                     else:
                         st.error("❌ 제출 실패. 다시 시도해주세요.")
+                        st.session_state.submitted_2 = False
 
 if __name__ == "__main__":
     main()
