@@ -23,23 +23,6 @@ def format_biz_no(d: str) -> str:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
 
-def _phone_on_change():
-    raw = st.session_state.get("phone_input_2", "")
-    d = _digits_only(raw)
-    st.session_state["phone_input_2"] = format_phone_from_digits(d)
-
-# 사업자번호 입력 시 숫자만 허용하고 10자리일 때 자동 하이픈 적용
-def on_change_biz_reg_no():
-    """사업자번호 입력 시 숫자만 허용하고 10자리일 때 자동 하이픈 적용"""
-    raw = st.session_state.get("biz_reg_no", "")
-    digits = _digits_only(raw)
-    if len(digits) > 10:
-        digits = digits[:10]
-    if len(digits) == 10:
-        st.session_state["biz_reg_no"] = format_biz_no(digits)
-    else:
-        st.session_state["biz_reg_no"] = digits
-
 RELEASE_VERSION = "v2025-09-03-1"
 
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwH8OKYidK3GRtcx5lTvvmih6iTidS0yhuoSu3DcWn8WPl_LZ6gBcnbZHvqDksDX7DD/exec"
@@ -247,8 +230,8 @@ def main():
     st.info("✔ 1차 상담 후 진행하는 **심화 진단** 절차입니다.")
 
     # 세션 상태 초기화 (사업자번호)
-    if "biz_reg_no" not in st.session_state:
-        st.session_state["biz_reg_no"] = ""
+    if "biz_no_input" not in st.session_state:
+        st.session_state["biz_no_input"] = ""
     if "phone_input_2" not in st.session_state:
         st.session_state["phone_input_2"] = ""
     
@@ -266,15 +249,14 @@ def main():
             key="phone_input_2",
             placeholder="010-0000-0000",
             help="숫자만 입력하면 자동으로 하이픈(-)이 적용됩니다.",
-            on_change=_phone_on_change,
         )
+        st.caption("※ 폼 내부에서는 실시간 하이픈이 제한됩니다. 제출 시 자동 포맷 및 검증됩니다.")
         # 사업자등록번호: 숫자만 입력해도 자동 하이픈
-        biz_reg_no = st.text_input(
+        st.text_input(
             "사업자등록번호 (필수)",
-            key="biz_reg_no",
+            key="biz_no_input",
             placeholder="0000000000",
-            help="숫자만 입력하세요. 10자리 입력 시 자동으로 000-00-00000 형식으로 변환됩니다.",
-            on_change=on_change_biz_reg_no
+            help="숫자만 입력하세요. 제출 시 자동으로 000-00-00000 형식으로 변환 및 검증됩니다.",
         )
         col1, col2 = st.columns(2)
         with col1:
@@ -352,9 +334,9 @@ def main():
             formatted_phone = format_phone_from_digits(digits) if phone_valid else st.session_state.get("phone_input_2", "")
 
             # 사업자번호는 세션상태에서 읽기 (자동포맷 반영)
-            biz_reg_no = st.session_state.get("biz_reg_no", "")
-            biz_digits = _digits_only(biz_reg_no)
-            formatted_biz = format_biz_no(biz_digits) if len(biz_digits) == 10 else biz_reg_no
+            biz_raw = st.session_state.get("biz_no_input", "")
+            biz_digits = _digits_only(biz_raw)
+            formatted_biz = format_biz_no(biz_digits) if len(biz_digits) == 10 else biz_raw
 
             biz_valid = (len(biz_digits) == 10)
             if not name:
@@ -376,7 +358,7 @@ def main():
                         'phone': formatted_phone,
                         'email': email,
                         'biz_reg_no': formatted_biz,
-                        'startup_date': startup_date.strftime('%Y-%m'),
+                        'startup_date': startup_date.strftime('%Y-%m-%d'),
                         'revenue_y1': revenue_y1,
                         'revenue_y2': revenue_y2,
                         'revenue_y3': revenue_y3,
