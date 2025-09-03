@@ -308,7 +308,7 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            startup_date = st.date_input("사업 시작일 (필수)", min_value=datetime(1900, 1, 1), format="YYYY. M. D.")
+            startup_date = st.date_input("사업 시작일 (필수)", min_value=datetime(1900, 1, 1), format="YYYY-MM-DD")
         with col2:
             st.write(" ") # Align vertically
         
