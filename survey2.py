@@ -217,6 +217,31 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Inserted Streamlit primary button color override (navy)
+st.markdown("""
+<style>
+  :root {
+    --primary-color:#002855 !important;  /* force Streamlit theme primary */
+  }
+  /* Force primary buttons to navy (Streamlit kinds) */
+  .stButton > button,
+  button[kind="primary"],
+  button[data-testid="baseButton-primary"]{
+    background:#002855 !important;
+    color:#ffffff !important;
+    border:1px solid #002855 !important;
+    font-weight:600 !important;
+    border-radius:6px !important;
+    padding:10px 16px !important;
+  }
+  .stButton > button:hover,
+  button[kind="primary"]:hover,
+  button[data-testid="baseButton-primary"]:hover{
+    filter:brightness(0.95);
+  }
+</style>
+""", unsafe_allow_html=True)
+
 def _get_query_params():
     """
     Streamlit v1.28+ : st.query_params (mapping[str,str])
