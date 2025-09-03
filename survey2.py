@@ -24,6 +24,18 @@ def format_biz_no(d: str) -> str:
         return f"{d[0:3]}-{d[3:5]}-{d[5:10]}"
     return d
 
+# 사업자번호 입력 시 숫자만 허용하고 10자리일 때 자동 하이픈 적용
+def on_change_biz_reg_no():
+    """사업자번호 입력 시 숫자만 허용하고 10자리일 때 자동 하이픈 적용"""
+    raw = st.session_state.get("biz_reg_no", "")
+    digits = _digits_only(raw)
+    if len(digits) > 10:
+        digits = digits[:10]
+    if len(digits) == 10:
+        st.session_state["biz_reg_no"] = format_biz_no(digits)
+    else:
+        st.session_state["biz_reg_no"] = digits
+
 RELEASE_VERSION = "v2025-09-03-1"
 
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwH8OKYidK3GRtcx5lTvvmih6iTidS0yhuoSu3DcWn8WPl_LZ6gBcnbZHvqDksDX7DD/exec"
@@ -223,39 +235,66 @@ def main():
     st.markdown("##### 맞춤형 정책자금 매칭을 위해 상세 정보를 입력해주세요.")
 
     is_test_mode = (_get_qp("test") == "true")
+    # 1차 설문 접수번호(rid) 브리지: ?rid=YPYYYYMMDD-XXXX 로 전달된 값을 읽어 2차 저장 시 함께 전송
+    parent_receipt_no = _get_qp("rid")
     if is_test_mode:
         st.warning("⚠️ 테스트 모드 - 실제 저장되지 않습니다.")
 
     st.info("✔ 1차 상담 후 진행하는 **심화 진단** 절차입니다.")
+
+    # 세션 상태 초기화 (사업자번호)
+    if "biz_reg_no" not in st.session_state:
+        st.session_state["biz_reg_no"] = ""
     
     with st.form("second_survey"):
         if 'submitted' not in st.session_state:
             st.session_state.submitted = False
 
         st.markdown("### 📝 2차 설문 - 상세 정보")
-        
-        # A. 기본 정보
-        st.markdown("#### 👤 기본 정보")
+
+        # A. 기본 정보 (필수 우선)
+        st.markdown("#### 👤 기본 정보 (필수)")
         name = st.text_input("성함 (필수)", placeholder="홍길동").strip()
-        phone_raw = st.text_input("연락처 (필수)", placeholder="010-0000-0000")
+        phone_raw = st.text_input("연락처 (필수)", placeholder="01000000000", help="숫자만 입력하면 자동으로 하이픈(-)이 적용됩니다.")
         st.caption("숫자만 입력하세요. 자동으로 하이픈이 추가됩니다.")
-        email = st.text_input("이메일 (선택)", placeholder="email@example.com")
-        st.markdown("---")
-        
-        # B. 사업 정보
-        st.markdown("#### 📊 사업 정보")
-        biz_reg_no = st.text_input("사업자등록번호 (필수)", placeholder="000-00-00000")
-        
+        # 사업자등록번호: 숫자만 입력해도 자동 하이픈
+        biz_reg_no = st.text_input(
+            "사업자등록번호 (필수)",
+            key="biz_reg_no",
+            placeholder="0000000000",
+            help="숫자만 입력하세요. 10자리 입력 시 자동으로 000-00-00000 형식으로 변환됩니다.",
+            on_change=on_change_biz_reg_no
+        )
         col1, col2 = st.columns(2)
         with col1:
-            startup_date = st.date_input("사업 시작일 (필수)", 
-                                        min_value=datetime(1900, 1, 1), 
-                                        format="YYYY-MM-DD")
+            startup_date = st.date_input("사업 시작일 (필수)",
+                                         min_value=datetime(1900, 1, 1),
+                                         format="YYYY-MM-DD")
         with col2:
-            st.write(" ")  # 정렬용
-        
-        # C. 재무 정보
-        st.markdown("#### 💰 재무 현황")
+            st.write(" ")
+        st.markdown("---")
+
+        # D. 리스크 체크 (필수)
+        st.markdown("#### 🚨 리스크 확인 (필수)")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            tax_status = st.selectbox("세금 체납", ["체납 없음", "체납 있음", "분납 중"])
+        with col_b:
+            credit_status = st.selectbox("금융 연체", ["연체 없음", "30일 미만", "30일 이상"])
+        business_status = st.selectbox("영업 상태", ["정상 영업", "휴업", "폐업 예정"])
+        risk_msgs = []
+        if tax_status != "체납 없음": risk_msgs.append("세금 체납")
+        if credit_status != "연체 없음": risk_msgs.append("금융 연체")
+        if business_status != "정상 영업": risk_msgs.append("휴/폐업")
+        if risk_msgs:
+            st.warning(f"지원 제한 사항: {', '.join(risk_msgs)}")
+        st.markdown("---")
+
+        # 선택 항목 (아래쪽)
+        st.markdown("#### 📧 연락처 (선택)")
+        email = st.text_input("이메일 (선택)", placeholder="email@example.com")
+
+        st.markdown("#### 💰 재무 현황 (선택)")
         st.markdown("**최근 3년간 연매출액 (단위: 만원)**")
         current_year = datetime.now().year
         col_y1, col_y2, col_y3 = st.columns(3)
@@ -265,44 +304,22 @@ def main():
             revenue_y2 = st.text_input(f"{current_year-1}년", placeholder="예: 3500")
         with col_y3:
             revenue_y3 = st.text_input(f"{current_year-2}년", placeholder="예: 2000")
-        
         st.caption("⚠️ 매출액은 정책자금 한도 산정의 기준이 됩니다.")
         st.markdown("---")
 
-        # D. 기술/인증
-        st.markdown("#### 💡 기술·인증 보유")
+        st.markdown("#### 💡 기술·인증 보유 (선택)")
         ip_options = ["특허 보유", "실용신안 보유", "디자인 등록 보유", "해당 없음"]
         ip_status = st.multiselect("지식재산권", ip_options, placeholder="선택하세요")
-        
         research_lab = st.radio("기업부설연구소", ["보유", "미보유"], horizontal=True)
         st.markdown("---")
 
-        # E. 자금 계획
-        st.markdown("#### 💵 자금 활용 계획")
-        funding_purpose = st.multiselect("자금 용도", 
-                                        ["시설자금", "운전자금", "R&D자금", "기타"],
-                                        placeholder="선택하세요")
-        
-        detailed_plan = st.text_area("상세 활용 계획", 
-                                     placeholder="예: 생산설비 2억, 원자재 구매 1억")
-        st.markdown("---")
-        
-        # F. 리스크 체크
-        st.markdown("#### 🚨 리스크 확인")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            tax_status = st.selectbox("세금 체납", ["체납 없음", "체납 있음", "분납 중"])
-        with col_b:
-            credit_status = st.selectbox("금융 연체", ["연체 없음", "30일 미만", "30일 이상"])
-        
-        business_status = st.selectbox("영업 상태", ["정상 영업", "휴업", "폐업 예정"])
-        
-        risk_msgs = []
-        if tax_status != "체납 없음": risk_msgs.append("세금 체납")
-        if credit_status != "연체 없음": risk_msgs.append("금융 연체")
-        if business_status != "정상 영업": risk_msgs.append("휴/폐업")
-        if risk_msgs:
-            st.warning(f"지원 제한 사항: {', '.join(risk_msgs)}")
+        st.markdown("#### 💵 자금 활용 계획 (선택)")
+        funding_purpose = st.multiselect(
+            "자금 용도",
+            ["시설자금", "운전자금", "R&D자금", "기타"],
+            placeholder="선택하세요"
+        )
+        detailed_plan = st.text_area("상세 활용 계획", placeholder="예: 생산설비 2억, 원자재 구매 1억")
         st.markdown("---")
 
         # G. 동의
@@ -317,15 +334,16 @@ def main():
 
         if submitted and not st.session_state.submitted:
             st.session_state.submitted = True
-            
+
             # 전화번호 포맷
             digits = _digits_only(phone_raw)
             formatted_phone = format_phone_from_digits(digits) if len(digits) == 11 else phone_raw
-            
-            # 사업자번호 포맷
+
+            # 사업자번호는 세션상태에서 읽기 (자동포맷 반영)
+            biz_reg_no = st.session_state.get("biz_reg_no", "")
             biz_digits = _digits_only(biz_reg_no)
             formatted_biz = format_biz_no(biz_digits) if len(biz_digits) == 10 else biz_reg_no
-            
+
             # 유효성 검사
             if not all([name, formatted_phone, formatted_biz, privacy_agree]):
                 st.error("필수 항목을 모두 입력해주세요.")
@@ -350,15 +368,16 @@ def main():
                         'business_status': business_status,
                         'privacy_agree': privacy_agree,
                         'marketing_agree': marketing_agree,
+                        'parent_receipt_no': parent_receipt_no,
                         'release_version': RELEASE_VERSION
                     }
-                    
+
                     result = save_to_google_sheet(survey_data, test_mode=is_test_mode)
 
                     if result.get('status') in ('success', 'test'):
                         st.success("✅ 2차 설문 제출 완료!")
                         st.info("전문가가 심층 분석 후 연락드립니다.")
-                        
+
                         st.markdown(f"""
                         <div class="cta-wrap">
                             <a class="cta-btn cta-primary" href="{KAKAO_CHAT_URL}" target="_blank">
@@ -367,67 +386,92 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # 5초 자동 복귀 + 머물기/바로가기 버튼 추가
-                        st.markdown("""
-                        <style>
-                        .auto-return-container {
-                            margin-top: 20px;
-                            padding: 15px;
-                            border: 1px solid #e1e5eb;
-                            border-radius: 8px;
-                            background: #fafafa;
-                            text-align: center;
-                            font-size: 14px;
-                            color: #333;
-                        }
-                        .auto-return-buttons {
-                            margin-top: 10px;
-                        }
-                        .auto-return-buttons button, .auto-return-buttons a {
-                            margin: 0 8px;
-                            padding: 8px 16px;
-                            border-radius: 6px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            text-decoration: none;
-                            color: #fff;
-                        }
-                        .btn-stay {
-                            background-color: #005BAC;
-                            border: none;
-                        }
-                        .btn-go {
-                            background-color: #FEE500;
-                            color: #3C1E1E;
-                            border: none;
-                        }
-                        </style>
-                        <div class="auto-return-container" id="autoReturnContainer">
-                            <div>5초 후에 이전 페이지로 자동 복귀합니다.</div>
-                            <div class="auto-return-buttons">
-                                <button class="btn-stay" id="btnStay">머물기</button>
-                                <a href="/" class="btn-go" target="_blank" rel="noopener noreferrer">홈으로 이동</a>
-                            </div>
-                        </div>
-                        <script>
-                        const container = document.getElementById('autoReturnContainer');
-                        const btnStay = document.getElementById('btnStay');
-                        let countdown = 5;
-                        let timer = setInterval(() => {
-                            countdown--;
-                            container.firstElementChild.textContent = countdown + '초 후에 이전 페이지로 자동 복귀합니다.';
-                            if(countdown <= 0) {
-                                clearInterval(timer);
-                                window.history.back();
-                            }
-                        }, 1000);
-                        btnStay.addEventListener('click', () => {
-                            clearInterval(timer);
-                            container.firstElementChild.textContent = '자동 복귀가 취소되었습니다.';
-                            btnStay.disabled = true;
-                        });
-                        </script>
-                        """, unsafe_allow_html=True)
+                        st.markdown(
+                            """
+  <div id="auto-return-wrap" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#fff;">
+    <div id="auto-return-msg" style="color:#374151;margin-bottom:8px;line-height:1.5;">
+      <strong style="color:#111;">안내:</strong> <span style="color:#111;">이 창은</span>
+      <strong><span id="countdown">5</span>초</strong> 후 이전 화면으로 자동 이동합니다.
+      필요하시면 아래 버튼으로 자동 이동을 취소하실 수 있어요.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="cta-btn cta-secondary" id="stay-here-btn" href="#" onclick="window.__stayHere=true;return false;" aria-label="자동 이동 취소">
+        ⏸️ 이 창에 머물기
+      </a>
+      <a class="cta-btn cta-primary" id="go-now-btn" href="#" onclick="(function(){try{window.__forceGoNow=true;}catch(e){}})();return false;" aria-label="지금 바로 이전 화면으로 이동">
+        🔙 지금 바로 돌아가기
+      </a>
+    </div>
+  </div>
+  <script>
+  (function(){
+    // 접근성: 화면읽기기에서 카운트다운이 변할 때 읽어주도록 설정
+    var live = document.createElement('div');
+    live.setAttribute('aria-live','polite');
+    live.setAttribute('aria-atomic','true');
+    live.style.position='absolute';
+    live.style.left='-9999px';
+    document.body.appendChild(live);
+  
+    function updateLive(msg){ try{ live.textContent = msg; }catch(e){} }
+  
+    function goBack(){
+      // 1) referrer 우선
+      if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+      // 2) 브라우저 히스토리
+      if (history.length > 1) { history.back(); return; }
+      // 3) 쿼리 파라미터 return_to
+      try {
+        var q = new URLSearchParams(location.search);
+        var ret = q.get('return_to');
+        if (ret) { location.replace(ret); return; }
+      } catch(e) {}
+      // 4) 최종 기본값
+      location.replace('/');
+    }
+  
+    var left = 5;
+    var el = document.getElementById('countdown');
+  
+    // 강제 이동 버튼
+    var goNow = document.getElementById('go-now-btn');
+    if (goNow){
+      goNow.addEventListener('click', function(e){
+        e.preventDefault();
+        goBack();
+      });
+    }
+  
+    // 타이머
+    var timer = setInterval(function(){
+      if (window.__stayHere === true) {
+        clearInterval(timer);
+        var msg = document.getElementById('auto-return-msg');
+        if (msg){ msg.innerHTML = '자동 이동이 취소되었습니다. 필요 시 상단의 링크 또는 브라우저 뒤로가기를 이용해 주세요.'; }
+        updateLive('자동 이동이 취소되었습니다.');
+        return;
+      }
+      if (window.__forceGoNow === true) {
+        clearInterval(timer);
+        goBack();
+        return;
+      }
+      left -= 1;
+      if (left <= 0){
+        clearInterval(timer);
+        goBack();
+      } else {
+        if (el) { el.textContent = left; updateLive(left + '초 남았습니다.'); }
+      }
+    }, 1000);
+  
+    // 초기 announce
+    updateLive('5초 후 이전 화면으로 이동합니다.');
+  })();
+  </script>
+  """,
+                            unsafe_allow_html=True,
+                        )
 
                     else:
                         st.error("❌ 제출 실패. 다시 시도해주세요.")
