@@ -7,13 +7,27 @@ from typing import Optional, Dict, Any, List
 # ==============================
 # 기본 페이지/레이아웃
 # ==============================
-st.set_page_config(page_title="유아플랜 3차 심층 설문", page_icon="🧭", layout="centered")
+st.set_page_config(page_title="유아플랜 3차 심층 설문", page_icon="🧭", layout="wide")
 
 # ------------------------------
 # 환경/상수 (필요시 교체)
 # ------------------------------
 RELEASE_VERSION_3 = "v2025-09-10-1"
 TIMEOUT_SEC = 45  # 서버 지연 대비. 재시도 없음, pending 처리 철학 유지
+
+# ===== 브랜드/로고 설정 (1차/2차와 동일 규칙) =====
+BRAND_NAME = "유아플랜"
+DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
+
+def _get_logo_url() -> str:
+    # Secrets → Env → 기본값
+    try:
+        v = st.secrets.get("YOUAREPLAN_LOGO_URL")
+        if v:
+            return str(v)
+    except Exception:
+        pass
+    return os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 
 # 3차 저장용 GAS 엔드포인트 (회장님 배포 후 교체)
 THIRD_GAS_URL = os.getenv("THIRD_GAS_URL", "https://script.google.com/macros/s/DEPLOY_ID_3RD/exec")
@@ -86,6 +100,21 @@ st.markdown("""
   .cta-wrap{ margin-top:10px; padding:12px; border:1px solid var(--gov-border); border-radius:8px; background:#fafafa; }
   .cta-kakao{ display:block; text-align:center; font-weight:700; text-decoration:none; padding:12px 16px; border-radius:10px; background:#FEE500; color:#3C1E1E; border:1px solid #FEE500; }
   .cta-kakao:hover{ filter:brightness(.97); }
+
+  /* ===== Brand bar (1차/2차와 동일) ===== */
+  .brandbar{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 6px 4px 6px; margin:0 0 8px 0;
+    border-bottom:1px solid var(--gov-border);
+  }
+  .brandbar img{ height:34px; display:block; }
+  .brandbar .brandtxt{ font-weight:800; letter-spacing:-0.2px; color:#0f172a; }
+
+  /* Mobile: 로고 크게 */
+  @media (max-width: 640px){
+    .brandbar img{ height:44px; }
+    .gov-hero{ padding-top:8px; }
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -142,6 +171,19 @@ def take_lock(receipt_no: str, uuid: str, role: str) -> Dict[str, Any]:
 # ==============================
 def main():
     st.markdown("<div class='gov-topbar'>대한민국 정부 협력 서비스</div>", unsafe_allow_html=True)
+
+    # 브랜드 바 (로고 + 텍스트)
+    _logo_url = _get_logo_url()
+    st.markdown(
+        f"""
+        <div class="brandbar">
+          {f'<img src="{_logo_url}" alt="{BRAND_NAME} 로고" />' if _logo_url else ''}
+          <span class="brandtxt">{BRAND_NAME}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.markdown("""
     <div class="gov-hero">
       <h2>3차 심층 설문</h2>
