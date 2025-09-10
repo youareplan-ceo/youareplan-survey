@@ -3,7 +3,7 @@
 
 # venv
 .venv/
-*/.venv/
+venv/
 
 # VSCode
 .vscode/
@@ -14,26 +14,8 @@ __pycache__/
 *.pyo
 *.pyd
 *.egg-info/
-__pycache__/
-.env
 .streamlit/
-*.pyc
-.DS_Store
-.venv/
-__pycache__/
-.DS_Store
+.env
 
 # Ignore cache
 __pycache__/
-.DS_Store
-.venv/
-
-# Ignore cache
-__pycache__/
-.DS_Store
-.venv/
-
-# Ignore cache
-__pycache__/
-.DS_Store
-.venv/
