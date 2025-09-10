@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# venv
+.venv/
+*/.venv/
+
+# VSCode
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+__pycache__/
+.env
+.streamlit/
+*.pyc
+.DS_Store
