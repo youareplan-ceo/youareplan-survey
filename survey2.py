@@ -1,75 +1,56 @@
+# --- Render 배포용: 외부 src 의존 제거 (Config/HTTP 내장) ---
+import os
+import time
+import re
+from datetime import datetime
+from typing import Optional
+from uuid import uuid4
+import json
+import requests
 import streamlit as st
 
-import requests
-# --- Make repo root importable so `src` (at repo root) resolves when Root Directory is `youareplan-survey` ---
-import os, sys
-_CUR = os.path.dirname(__file__)
-_ROOT = os.path.abspath(os.path.join(_CUR, os.pardir))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+# --- Render 배포용: 외부 src 의존 제거 (Config/HTTP 내장) ---
+class _Config:
+    # 환경변수가 있으면 그것을 쓰고, 없으면 안전한 기본값(또는 placeholder)
+    SECOND_GAS_URL = os.getenv("SECOND_GAS_URL", "https://script.google.com/macros/s/YOUR_GAS_ID/exec")
+    FIRST_GAS_TOKEN_API_URL = os.getenv("FIRST_GAS_TOKEN_API_URL", "https://script.google.com/macros/s/YOUR_TOKEN_API_ID/exec")
+    API_TOKEN_STAGE2 = os.getenv("API_TOKEN_2", "youareplan_stage2")
 
-# ---- HTTP 멱등/재시도 래퍼 (2차 제출 안정화) ----
-def _idem_key(prefix="c2"):
+config = _Config()
+
+def _idemp_key(prefix="c2"):
     return f"{prefix}-{int(time.time()*1000)}-{uuid4().hex[:8]}"
-def _json_post_with_resilience(url, payload, timeout=12, retries=2, backoff=0.6, headers=None):
-    import json
-    h = {"Content-Type":"application/json"}
-    if headers: h.update(headers)
-    # 멱등키 부여 (서버가 지원하지 않아도 무해)
-    h.setdefault("X-Idempotency-Key", _idem_key())
+
+def post_json(url, payload, headers=None, timeout=10, retries=1):
+    """
+    Apps Script와 통신용 JSON POST.
+    (ok: bool, status_code: Optional[int], data: dict, err: Optional[str]) 반환.
+    """
+    h = {"Content-Type": "application/json", "X-Idempotency-Key": _idemp_key()}
+    if headers:
+        h.update(headers)
+
     last_exc = None
-    for i in range(retries+1):
+    for i in range(retries + 1):
         try:
             r = requests.post(url, data=json.dumps(payload), headers=h, timeout=timeout)
-            # 200 아닌 경우에도 본문을 최대한 파싱
             try:
-                j = r.json()
+                data = r.json()
             except Exception:
-                j = {"ok": False, "status": "error", "http": r.status_code, "text": r.text[:300]}
+                data = {"ok": False, "status": "error", "http": r.status_code, "text": r.text[:300]}
             if r.status_code == 200:
-                return j
-            # 4xx는 재시도 무의미, 단 429/408은 1회 재시도
-            if r.status_code in (408,429) and i < retries:
-                time.sleep(backoff*(i+1))
+                return True, 200, (data if isinstance(data, dict) else {}), None
+            # 408/429는 1회 재시도
+            if r.status_code in (408, 429) and i < retries:
+                time.sleep(0.6 * (i + 1))
                 continue
-            return j
+            return False, r.status_code, (data if isinstance(data, dict) else {}), f"HTTP {r.status_code}"
         except Exception as e:
             last_exc = e
             if i < retries:
-                time.sleep(backoff*(i+1))
-            else:
-                return {"ok": False, "status": "error", "exception": str(last_exc)}
-
-import time
-from datetime import datetime
-import re
-import os
-from typing import Optional
-from uuid import uuid4
-# --- Load helpers from repo-root/src without colliding with working-dir named "src" on Render ---
-import importlib.util
-
-def _load_module_from(path: str, mod_name: str):
-    spec = importlib.util.spec_from_file_location(mod_name, path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader, f"Failed to load spec for {mod_name} from {path}"
-    spec.loader.exec_module(mod)  # type: ignore[attr-defined]
-    return mod
-
-_CFG_PATH = os.path.join(_ROOT, 'src', 'config.py')
-_HTTP_PATH = os.path.join(_ROOT, 'src', 'http_client.py')
-config = _load_module_from(_CFG_PATH, 'youaplan_src_config')
-_http_mod = _load_module_from(_HTTP_PATH, 'youaplan_src_http_client')
-_hc_post_json = _http_mod.post_json
-
-# Compatibility shim to preserve existing call sites expecting
-# (ok, status_code, data, err)
-def json_post(url, payload, headers=None, timeout=10, retries=1):
-    ok, data = _hc_post_json(url, payload, headers=headers, timeout=(5.0, float(timeout)))
-    status_code = 200 if ok else None
-    err = None if ok else (data.get('error') if isinstance(data, dict) else str(data))
-    return ok, status_code, (data if isinstance(data, dict) else {}), err
-
+                time.sleep(0.6 * (i + 1))
+                continue
+            return False, None, {}, str(last_exc)
 
 st.set_page_config(page_title="유아플랜 정책자금 2차 심화진단", page_icon="📝", layout="centered")
 
@@ -126,7 +107,7 @@ TOKEN_API_URL = config.FIRST_GAS_TOKEN_API_URL
 INTERNAL_SHARED_KEY = "youareplan"  # must match 1차 GAS
 
 # API token (stage2)
-API_TOKEN = getattr(config, "API_TOKEN_STAGE2", os.getenv("API_TOKEN_2", "youareplan_stage2"))
+API_TOKEN = config.API_TOKEN_STAGE2
 
 # KakaoTalk Channel
 KAKAO_CHANNEL_ID = "_LWxexmn"
@@ -823,59 +804,54 @@ def main():
                         'parent_receipt_no': parent_rid,
                         'magic_token': magic_token,
                     }
-                if not (survey_data.get('uuid') or survey_data.get('UUID')):
-                    survey_data['uuid'] = str(uuid4())
+                    if not (survey_data.get('uuid') or survey_data.get('UUID')):
+                        survey_data['uuid'] = str(uuid4())
 
+                    # 재전송/더블탭 대비: 제출 직전 토큰 재검증
+                    v2 = validate_access_token(magic_token)
+                    if not v2.get("ok"):
+                        st.error(f"접속이 만료되었습니다: {v2.get('message', v2.get('error','만료/소진'))}")
+                        st.session_state.submitted_2 = False
+                        st.session_state.saving2 = False
+                        st.stop()
 
+                    result = save_to_google_sheet(survey_data, timeout_sec=45, retries=0, test_mode=is_test_mode)
 
-            # 재전송/더블탭 대비: 제출 직전 토큰 재검증
-            v2 = validate_access_token(magic_token)
-            if not v2.get("ok"):
-                st.error(f"접속이 만료되었습니다: {v2.get('message', v2.get('error','만료/소진'))}")
-                st.session_state.submitted_2 = False
-                st.session_state.saving2 = False
-                st.stop()
-            result = save_to_google_sheet(survey_data, timeout_sec=45, retries=0, test_mode=is_test_mode)
-
-            if result.get('status') in ('success', 'test', 'pending'):
-                st.success("✅ 2차 설문 제출 완료!" if result.get('status') != 'pending' else "✅ 제출 접수 완료! (서버 응답 지연 중)")
-                st.info("전문가가 심층 분석 후 연락드립니다.")
-
-                st.markdown(f"""
-                <div class="cta-wrap">
-                    <a class="cta-btn cta-kakao" href="{KAKAO_CHAT_URL}" target="_blank">
-                        💬 전문가에게 문의하기
-                    </a>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # 1.5초 후 자동 복귀
-                st.markdown("""
-                <script>
-                (function(){
-                  function goBack(){
-                    if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
-                    if (history.length > 1) { history.back(); return; }
-                    location.replace('/');
-                  }
-                  setTimeout(goBack, 1500);
-                })();
-                </script>
-                """, unsafe_allow_html=True)
-                st.session_state.saving2 = False
-                st.stop()
-
-            else:
-                st.error("❌ 제출 실패. 잠시 후 다시 시도해주세요.")
-                st.markdown(f"""
-                <div class="cta-wrap">
-                    <a class="cta-btn cta-kakao" href="{KAKAO_CHAT_URL}" target="_blank">
-                        💬 담당자에게 문의하기
-                    </a>
-                </div>
-                """, unsafe_allow_html=True)
-                st.session_state.submitted_2 = False
-                st.session_state.saving2 = False
+                    if result.get('status') in ('success', 'test', 'pending'):
+                        st.success("✅ 2차 설문 제출 완료!" if result.get('status') != 'pending' else "✅ 제출 접수 완료! (서버 응답 지연 중)")
+                        st.info("전문가가 심층 분석 후 연락드립니다.")
+                        st.markdown(f"""
+                        <div class="cta-wrap">
+                            <a class="cta-btn cta-kakao" href="{KAKAO_CHAT_URL}" target="_blank">
+                                💬 전문가에게 문의하기
+                            </a>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.markdown("""
+                        <script>
+                        (function(){
+                          function goBack(){
+                            if (document.referrer && document.referrer !== location.href) { location.replace(document.referrer); return; }
+                            if (history.length > 1) { history.back(); return; }
+                            location.replace('/');
+                          }
+                          setTimeout(goBack, 1500);
+                        })();
+                        </script>
+                        """, unsafe_allow_html=True)
+                        st.session_state.saving2 = False
+                        st.stop()
+                    else:
+                        st.error("❌ 제출 실패. 잠시 후 다시 시도해주세요.")
+                        st.markdown(f"""
+                        <div class="cta-wrap">
+                            <a class="cta-btn cta-kakao" href="{KAKAO_CHAT_URL}" target="_blank">
+                                💬 담당자에게 문의하기
+                            </a>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.session_state.submitted_2 = False
+                        st.session_state.saving2 = False
 
 if __name__ == "__main__":
     main()
