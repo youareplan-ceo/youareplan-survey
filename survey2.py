@@ -479,10 +479,13 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
     ok, status_code, resp_data, err = json_post(
         APPS_SCRIPT_URL,
         data,
-        headers={"X-Request-ID": request_id},
-        timeout=min(10, timeout_sec),
+        headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
+        timeout=timeout_sec,
         retries=0,
     )
+    # Normalize Apps Script success shape: accept {ok:true} or {status:"success"}
+    if (not ok) and isinstance(resp_data, dict) and resp_data.get("ok") is True:
+        ok, status_code, err = True, (status_code or 200), None
 
     ambiguous_seen = False
     if (status_code and 200 <= status_code <= 299) and resp_data:
@@ -498,10 +501,12 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
         ok2, status_code2, resp_data2, err2 = json_post(
             APPS_SCRIPT_URL,
             data,
-            headers={"X-Request-ID": request_id},
-            timeout=min(10, timeout_sec),
+            headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
+            timeout=timeout_sec,
             retries=max(3, retries),
         )
+        if (not ok2) and isinstance(resp_data2, dict) and resp_data2.get("ok") is True:
+            ok2, status_code2, err2 = True, (status_code2 or 200), None
         if ok2:
             return resp_data2 or {"status": "success"}
         # If any ambiguous/pending observed either before or during final response
