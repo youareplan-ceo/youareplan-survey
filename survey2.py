@@ -1,5 +1,12 @@
 import streamlit as st
+
 import requests
+# --- Make repo root importable so `src` (at repo root) resolves when Root Directory is `youareplan-survey` ---
+import os, sys
+_CUR = os.path.dirname(__file__)
+_ROOT = os.path.abspath(os.path.join(_CUR, os.pardir))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 # ---- HTTP 멱등/재시도 래퍼 (2차 제출 안정화) ----
 def _idem_key(prefix="c2"):
