@@ -449,13 +449,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def validate_access_token(token: str, timeout_sec: int = 10) -> dict:
+def validate_access_token(token: str, uuid_hint: str | None = None, timeout_sec: int = 10) -> dict:
     """1차 GAS 토큰 검증. {ok, message, parent_receipt_no, remaining_minutes} 형식 기대."""
     try:
         payload = {"action": "validate", "token": token, "api_token": INTERNAL_SHARED_KEY}
-        if not (payload.get("uuid") or payload.get("UUID")):
-            payload["uuid"] = str(uuid4())
-        ok, status_code, resp_data, err = json_post(
+        if uuid_hint:
+            payload["uuid"] = uuid_hint
+        ok, status_code, resp_data, err = post_json(
             TOKEN_API_URL,
             payload,
             headers={"Content-Type": "application/json"},
@@ -477,7 +477,7 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
 
     # First single attempt to detect retry-worthy failures and show user message
     request_id = str(uuid4())
-    ok, status_code, resp_data, err = json_post(
+    ok, status_code, resp_data, err = post_json(
         APPS_SCRIPT_URL,
         data,
         headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
@@ -499,7 +499,7 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
     # If first attempt failed due to timeout/5xx etc., inform and retry up to 3
     if (status_code is None) or status_code == 429 or (500 <= (status_code or 0) <= 599):
         st.info("서버 응답이 지연되어 재시도 중입니다 (최대 3회)…")
-        ok2, status_code2, resp_data2, err2 = json_post(
+        ok2, status_code2, resp_data2, err2 = post_json(
             APPS_SCRIPT_URL,
             data,
             headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
@@ -550,9 +550,11 @@ def main():
         qp = st.query_params
         is_test_mode = qp.get("test") == "true"
         magic_token = qp.get("t")
+        uuid_hint = qp.get("u")
     except Exception:
         is_test_mode = False
         magic_token = None
+        uuid_hint = None
 
     if is_test_mode:
         st.warning("⚠️ 테스트 모드 - 실제 저장되지 않습니다.")
@@ -563,7 +565,7 @@ def main():
         st.markdown(f"<div class='cta-wrap'><a class='cta-btn cta-kakao' href='{KAKAO_CHAT_URL}' target='_blank'>💬 재발급 요청하기</a></div>", unsafe_allow_html=True)
         return
 
-    v = validate_access_token(magic_token)
+    v = validate_access_token(magic_token, uuid_hint=uuid_hint)
     if not v.get("ok"):
         # Blocked screen
         msg = v.get("message") or v.get("error") or "토큰 검증 실패"
@@ -804,11 +806,14 @@ def main():
                         'parent_receipt_no': parent_rid,
                         'magic_token': magic_token,
                     }
-                    if not (survey_data.get('uuid') or survey_data.get('UUID')):
+                    # 우선순위: 링크의 u 파라미터 → 없으면 새로 생성
+                    if uuid_hint:
+                        survey_data['uuid'] = uuid_hint
+                    elif not (survey_data.get('uuid') or survey_data.get('UUID')):
                         survey_data['uuid'] = str(uuid4())
 
                     # 재전송/더블탭 대비: 제출 직전 토큰 재검증
-                    v2 = validate_access_token(magic_token)
+                    v2 = validate_access_token(magic_token, uuid_hint=uuid_hint)
                     if not v2.get("ok"):
                         st.error(f"접속이 만료되었습니다: {v2.get('message', v2.get('error','만료/소진'))}")
                         st.session_state.submitted_2 = False
