@@ -18,6 +18,28 @@ class _Config:
 
 config = _Config()
 
+# --- GAS URL 정규화 함수 ---
+def _normalize_gas_url(u: str) -> str:
+    """
+    Ensure a Google Apps Script web app URL points to the executable endpoint.
+    - Trims whitespace
+    - If it looks like a GAS script URL and doesn't end with '/exec', append it.
+    - Passes through non-string or empty values unchanged.
+    """
+    try:
+        s = str(u or "").strip()
+    except Exception:
+        return u
+    if not s:
+        return s
+    # If it's already a complete endpoint, keep as is.
+    if s.endswith("/exec") or s.endswith("/dev"):
+        return s
+    # Heuristic: If it looks like a GAS base ('/macros/s/AKf...'), append '/exec'.
+    if "/macros/s/" in s and s.startswith("http"):
+        return s + "/exec"
+    return s
+
 def _idemp_key(prefix="c2"):
     return f"{prefix}-{int(time.time()*1000)}-{uuid4().hex[:8]}"
 
@@ -100,10 +122,10 @@ def _biz_on_change():
 RELEASE_VERSION = "v2025-09-05-1845"
 
 # Centralized config
-APPS_SCRIPT_URL = config.SECOND_GAS_URL
+APPS_SCRIPT_URL = _normalize_gas_url(config.SECOND_GAS_URL)
 
 # Token validation API (1차 GAS)
-TOKEN_API_URL = config.FIRST_GAS_TOKEN_API_URL
+TOKEN_API_URL = _normalize_gas_url(config.FIRST_GAS_TOKEN_API_URL)
 INTERNAL_SHARED_KEY = "youareplan"  # must match 1차 GAS
 
 # API token (stage2)
@@ -450,8 +472,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def validate_access_token(token: str, uuid_hint: str | None = None, timeout_sec: int = 10) -> dict:
-    """1차 GAS 토큰 검증. {ok, message, parent_receipt_no, remaining_minutes} 형식 기대."""
+    """1차 GAS 토큰 검증. {ok, message, parent_receipt_no, remaining_minutes} 형식 기대.
+    - 기본은 POST JSON
+    - POST가 404면(잘못된 URL/미배포) GET 쿼리로 한 번 더 시도
+    - 환경변수 미설정(placeholder URL)일 때 사람 친화적 오류 문구
+    """
     try:
+        # 친절한 placeholder 감지
+        if "YOUR_GAS_ID" in TOKEN_API_URL or "YOUR_TOKEN_API_ID" in TOKEN_API_URL:
+            return {"ok": False, "message": "FIRST_GAS_TOKEN_API_URL(1차 검증 API)가 설정되지 않았습니다. Render 환경변수에 실제 GAS 배포 URL을 넣어주세요."}
+
         payload = {"action": "validate", "token": token, "api_token": INTERNAL_SHARED_KEY}
         if uuid_hint:
             payload["uuid"] = uuid_hint
@@ -464,6 +494,28 @@ def validate_access_token(token: str, uuid_hint: str | None = None, timeout_sec:
         )
         if ok:
             return resp_data or {"ok": False, "message": "empty response"}
+
+        # POST가 404면 GET로 재시도 (GAS 배포/권한 문제 또는 잘못된 경로일 수 있음)
+        if status_code == 404:
+            try:
+                import requests
+                # First GET try (normalized URL)
+                get_url = _normalize_gas_url(TOKEN_API_URL)
+                r = requests.get(get_url, params=payload, timeout=timeout_sec)
+                if r.status_code != 200:
+                    # Second attempt: explicitly force '/exec'
+                    if not get_url.endswith("/exec"):
+                        r = requests.get(get_url.rstrip("/") + "/exec", params=payload, timeout=timeout_sec)
+                try:
+                    j = r.json()
+                except Exception:
+                    j = {"ok": False, "message": f"GET 응답 파싱 실패 (HTTP {r.status_code})"}
+                if r.status_code == 200:
+                    return j
+                return {"ok": False, "message": f"HTTP {r.status_code}"}
+            except Exception as ge:
+                return {"ok": False, "message": str(ge)}
+
         return {"ok": False, "message": err or f"HTTP {status_code}"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
@@ -478,12 +530,14 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
     # First single attempt to detect retry-worthy failures and show user message
     request_id = str(uuid4())
     ok, status_code, resp_data, err = post_json(
-        APPS_SCRIPT_URL,
+        _normalize_gas_url(APPS_SCRIPT_URL),
         data,
         headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
         timeout=timeout_sec,
         retries=0,
     )
+    if "YOUR_GAS_ID" in APPS_SCRIPT_URL:
+        return {"status": "error", "message": "SECOND_GAS_URL(2차 저장 API)가 설정되지 않았습니다. Render 환경변수에 실제 GAS 배포 URL을 넣어주세요."}
     # Normalize Apps Script success shape: accept {ok:true} or {status:"success"}
     if (not ok) and isinstance(resp_data, dict) and resp_data.get("ok") is True:
         ok, status_code, err = True, (status_code or 200), None
@@ -500,7 +554,7 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
     if (status_code is None) or status_code == 429 or (500 <= (status_code or 0) <= 599):
         st.info("서버 응답이 지연되어 재시도 중입니다 (최대 3회)…")
         ok2, status_code2, resp_data2, err2 = post_json(
-            APPS_SCRIPT_URL,
+            _normalize_gas_url(APPS_SCRIPT_URL),
             data,
             headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
             timeout=timeout_sec,
@@ -555,6 +609,22 @@ def main():
         is_test_mode = False
         magic_token = None
         uuid_hint = None
+
+    # Optional debug panel: /?debug=1 에서 현재 설정 확인
+    try:
+        debug_flag = qp.get("debug") in ("1", "true", "yes")
+    except Exception:
+        debug_flag = False
+    if debug_flag:
+        masked_token_api = (TOKEN_API_URL[:60] + "…") if len(TOKEN_API_URL) > 60 else TOKEN_API_URL
+        masked_app_url = (APPS_SCRIPT_URL[:60] + "…") if len(APPS_SCRIPT_URL) > 60 else APPS_SCRIPT_URL
+        st.info("🔎 디버그 모드: 현재 엔드포인트 설정")
+        st.code(
+            "TOKEN_API_URL = {0}\nAPPS_SCRIPT_URL = {1}\n(normalized)\nTOKEN_API_URL = {2}\nAPPS_SCRIPT_URL = {3}".format(
+                masked_token_api, masked_app_url, _normalize_gas_url(TOKEN_API_URL), _normalize_gas_url(APPS_SCRIPT_URL)
+            ),
+            language="bash",
+        )
 
     if is_test_mode:
         st.warning("⚠️ 테스트 모드 - 실제 저장되지 않습니다.")
