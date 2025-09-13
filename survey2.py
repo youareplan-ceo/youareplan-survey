@@ -46,8 +46,21 @@ import re
 import os
 from typing import Optional
 from uuid import uuid4
-from src import config
-from src.http_client import post_json as _hc_post_json
+# --- Load helpers from repo-root/src without colliding with working-dir named "src" on Render ---
+import importlib.util
+
+def _load_module_from(path: str, mod_name: str):
+    spec = importlib.util.spec_from_file_location(mod_name, path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader, f"Failed to load spec for {mod_name} from {path}"
+    spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    return mod
+
+_CFG_PATH = os.path.join(_ROOT, 'src', 'config.py')
+_HTTP_PATH = os.path.join(_ROOT, 'src', 'http_client.py')
+config = _load_module_from(_CFG_PATH, 'youaplan_src_config')
+_http_mod = _load_module_from(_HTTP_PATH, 'youaplan_src_http_client')
+_hc_post_json = _http_mod.post_json
 
 # Compatibility shim to preserve existing call sites expecting
 # (ok, status_code, data, err)
