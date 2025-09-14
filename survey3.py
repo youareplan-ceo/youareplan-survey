@@ -12,9 +12,9 @@ from uuid import uuid4
 st.set_page_config(page_title="유아플랜 3차 심층 설문", page_icon="📝", layout="centered")
 
 # ------------------------------
-# 환경/상수 설정
+# 환경/상수 설정  
 # ------------------------------
-RELEASE_VERSION_3 = "v2025-09-14-1"
+RELEASE_VERSION_3 = "v2025-09-14-2"
 TIMEOUT_SEC = 45
 
 # 환경변수 헬퍼
@@ -24,7 +24,7 @@ def _env_int(name: str, default: int) -> int:
     except Exception:
         return default
 
-LIVE_SYNC_MS = _env_int("LIVE_SYNC_MS", 5000)  # 5초로 조정
+LIVE_SYNC_MS = _env_int("LIVE_SYNC_MS", 8000)  # 8초로 안전하게 조정
 SHOW_DEBUG = os.getenv("SHOW_DEBUG", "0") == "1"
 
 # ===== 브랜드/로고 설정 =====
@@ -40,8 +40,16 @@ def _get_logo_url() -> str:
         pass
     return os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 
-# 3차 저장용 GAS 엔드포인트
-APPS_SCRIPT_URL_3 = os.getenv("THIRD_GAS_URL", "https://script.google.com/macros/s/AKfycbzYOUR_DEPLOYMENT_ID/exec")
+# 🔧 3차 저장용 GAS 엔드포인트 (수정됨)
+def _get_gas_url() -> str:
+    """환경변수에서 GAS URL 가져오기, 없으면 오류 표시"""
+    url = os.getenv("THIRD_GAS_URL")
+    if not url:
+        st.error("⚠️ THIRD_GAS_URL 환경변수가 설정되지 않았습니다. Render 설정을 확인해주세요.")
+        st.stop()
+    return url
+
+APPS_SCRIPT_URL_3 = _get_gas_url()
 
 # 3차 API 토큰
 def _get_api_token_3() -> str:
@@ -91,16 +99,16 @@ def _json_post_with_resilience(url: str, payload: Dict[str, Any], timeout_sec: i
     
     # 재시도 가능한 오류인지 확인
     if data.get("status") in ["timeout", "error"]:
-        st.info("서버 응답이 지연되어 재시도 중입니다 (최대 2회)...")
+        st.info("서버 응답이 지연되어 재시도 중입니다...")
         
         # 재시도
-        for attempt in range(2):
+        for attempt in range(1):  # 1회만 재시도
             ok2, data2 = _http_post_json(url, payload, headers=headers, timeout=min(15, timeout_sec))
             if ok2:
                 return data2
         
-        # 모든 재시도 실패
-        st.warning("접수 요청은 전달되었을 수 있습니다. 잠시 후 '통합 뷰'에서 반영 여부를 확인해 주세요.")
+        # 재시도 실패
+        st.warning("서버 처리가 지연되고 있습니다. 잠시 후 결과를 확인해주세요.")
         return {"status": "pending", "message": "서버 응답 지연"}
     
     return data
@@ -162,6 +170,22 @@ def _calc_progress_pct() -> int:
                 filled += 1
     return round((filled / len(keys)) * 100)
 
+# 🔧 Streamlit 호환성 함수 (수정됨)
+def _safe_rerun():
+    """Streamlit 버전에 맞는 rerun 함수 호출"""
+    try:
+        st.rerun()  # 최신 버전
+    except AttributeError:
+        try:
+            st.experimental_rerun()  # 구버전
+        except AttributeError:
+            # 매우 구버전인 경우 JavaScript로 새로고침
+            st.markdown("""
+            <script>
+            setTimeout(function(){ location.reload(); }, 100);
+            </script>
+            """, unsafe_allow_html=True)
+
 # ==============================
 # 스냅샷 관리
 # ==============================
@@ -215,20 +239,20 @@ def _render_snapshot_preview(snap: Dict[str, Any]) -> None:
                 _merge_snapshot_data(snap)
                 st.session_state.show_snapshot_preview = False
                 _alert("스냅샷 내용을 폼에 반영했습니다.", "ok")
-                st.rerun()
+                _safe_rerun()
         with c2:
             if st.button("🔄 다시 불러오기", key="reload_snapshot"):
                 s2 = snapshot_third(st.session_state.get("receipt_no",""), st.session_state.get("uuid",""))
                 if s2.get("status") == "success":
                     st.session_state.last_snapshot = s2
                     _alert("최신 스냅샷을 다시 불러왔습니다.", "ok")
-                    st.rerun()
+                    _safe_rerun()
                 else:
                     _alert("스냅샷 조회 실패", "warn")
         with c3:
             if st.button("🧹 닫기", key="close_preview"):
                 st.session_state.show_snapshot_preview = False
-                st.rerun()
+                _safe_rerun()
 
 # ==============================
 # CSS 스타일
@@ -363,7 +387,7 @@ def main():
     except Exception:
         receipt_no, uuid, role = "", "", "client"
 
-    # URL 파라미터 정규화
+    # URL 파라미터 정규화 (안전하게 처리)
     try:
         current_r = _qp_get(st.query_params, "r", "")
         current_u = _qp_get(st.query_params, "u", "")
@@ -403,7 +427,7 @@ def main():
     if "readonly3" not in st.session_state:
         st.session_state.readonly3 = False
     if "live_sync3" not in st.session_state:
-        st.session_state.live_sync3 = True
+        st.session_state.live_sync3 = False  # 기본값을 False로 안정성 확보
 
     # 컨트롤 패널
     if can_connect:
@@ -448,18 +472,19 @@ def main():
                         st.session_state.last_snapshot = snap
                         st.session_state.show_snapshot_preview = True
                         _alert("최신 스냅샷을 불러왔습니다.", "ok")
-                        st.rerun()
+                        _safe_rerun()
                     else:
                         _alert("스냅샷 조회 실패", "warn")
         
         with meta_cols[5]:
             st.caption(f"편집자: {st.session_state.get('locked_by') or '-'}")
             st.caption(f"락만료: {st.session_state.get('lock_until') or '-'}")
+            # 🔧 실시간 동기화 기본 비활성화 (안전성)
             sync_enabled = st.toggle(
                 "실시간 동기화",
                 key="live_sync3",
-                value=st.session_state.get("live_sync3", True),
-                help=f"{int(LIVE_SYNC_MS/1000)}초 간격 자동 동기화",
+                value=st.session_state.get("live_sync3", False),  # 기본값 False
+                help="수동으로 활성화 시에만 자동 동기화됩니다",
                 disabled=not can_connect
             )
 
@@ -481,48 +506,34 @@ def main():
                         _merge_snapshot_data(snap)
                         st.session_state.conflict3 = False
                         _alert("서버 최신 버전으로 갱신했습니다.", "ok")
-                        st.rerun()
+                        _safe_rerun()
                     else:
                         _alert("스냅샷 조회 실패", "warn")
             with cc2:
                 if st.button("🧹 경고 닫기", key="close_conflict"):
                     st.session_state.conflict3 = False
-                    st.rerun()
+                    _safe_rerun()
             with cc3:
                 st.caption("TIP: 최신 불러오기 후 필요한 부분만 다시 입력하고 임시 저장하세요.")
 
-    # 실시간 동기화 (개선된 로직)
+    # 🔧 실시간 동기화 (매우 제한적으로만 활성화)
     if (can_connect and 
-        st.session_state.get("live_sync3", True) and 
+        st.session_state.get("live_sync3", False) and  # 사용자가 명시적으로 활성화한 경우만
         not st.session_state.get("saving3", False) and
         not st.session_state.get("show_snapshot_preview", False)):
         
-        # 마지막 동기화 시간 체크
-        last_sync = st.session_state.get("last_sync_time", 0)
-        current_time = datetime.now().timestamp()
-        
-        if current_time - last_sync > (LIVE_SYNC_MS / 1000):
-            try:
-                snap = snapshot_third(receipt_no, uuid)
-                if snap.get("status") == "success":
-                    remote_ver = int(snap.get("server_version") or 0)
-                    local_ver = int(st.session_state.get("version3") or 0)
-                    if remote_ver > local_ver:
-                        _merge_snapshot_data(snap)
-                        st.info("상대방 변경사항을 자동 반영했습니다.")
-                        st.rerun()
-                st.session_state.last_sync_time = current_time
-            except Exception:
-                pass
-
-    # 주기적 새로고침 (조건부)
-    if (can_connect and 
-        st.session_state.get("live_sync3", True) and 
-        not st.session_state.get("saving3", False)):
+        # 안전한 새로고침 (조건부)
         st.markdown(f"""
         <script>
         setTimeout(function(){{
-            if (!document.querySelector('[data-testid="stFormSubmitButton"] button:disabled')) {{
+            // 폼이 제출 중이 아닐 때만 새로고침
+            var submitButtons = document.querySelectorAll('[data-testid="stFormSubmitButton"] button');
+            var anyDisabled = false;
+            submitButtons.forEach(function(btn) {{
+                if (btn.disabled) anyDisabled = true;
+            }});
+            
+            if (!anyDisabled && !document.querySelector('.st-emotion-cache-*[aria-expanded="true"]')) {{
                 location.reload();
             }}
         }}, {LIVE_SYNC_MS});
@@ -597,7 +608,7 @@ def render_survey_form(can_connect: bool, receipt_no: str, uuid: str, role: str)
                 disabled=st.session_state.get("readonly3", False),
             )
 
-        st.markdown("### 🗒 코치 메모 (코치 전용)")
+        st.markdown("### 🗒 코치 메모")
         coach_notes = st.text_area(
             "컨설턴트 코멘트/후속 액션",
             placeholder="예: 부가세 신고서 원본 요청, 담보 감정 일정 예약",
@@ -649,8 +660,8 @@ def handle_form_submission(submit_draft: bool, submit_final: bool, can_connect: 
             return
         
         progress_pct = _calc_progress_pct()
-        if progress_pct < 60:
-            _alert("최종 제출을 위해 핵심 항목을 조금 더 채워주세요. (진행률 60% 이상 권장)", "warn")
+        if progress_pct < 40:  # 40%로 낮춤 (너무 엄격하지 않게)
+            _alert("최종 제출을 위해 핵심 항목을 조금 더 채워주세요.", "warn")
             return
 
     # 페이로드 구성
@@ -685,7 +696,7 @@ def handle_form_submission(submit_draft: bool, submit_final: bool, can_connect: 
 
     if status in ("success", "pending"):
         if status == "pending":
-            _alert("접수 완료(서버 응답 지연). 새로고침/중복 제출은 피해주세요.", "ok")
+            _alert("접수 완료! 서버 처리가 지연되고 있습니다.", "ok")
         else:
             _alert("저장/제출이 완료되었습니다.", "ok")
 
@@ -700,28 +711,13 @@ def handle_form_submission(submit_draft: bool, submit_final: bool, can_connect: 
         _alert("전문가 검토 후 후속 안내를 드립니다.", "ok")
         st.markdown(f"<div class='cta-wrap'><a class='cta-kakao' href='{KAKAO_CHAT_URL}' target='_blank'>💬 카카오 채널로 문의하기</a></div>", unsafe_allow_html=True)
 
-        # 자동 리다이렉트
-        st.markdown("""
-        <script>
-        setTimeout(function(){
-            if (document.referrer && document.referrer !== location.href) { 
-                location.replace(document.referrer); 
-            } else if (history.length > 1) { 
-                history.back(); 
-            } else { 
-                location.replace('/'); 
-            }
-        }, 2000);
-        </script>
-        """, unsafe_allow_html=True)
-
     elif status == "locked":
-        _alert("다른 사용자가 편집 중입니다. 잠시 후 다시 시도하거나 '편집 권한'을 눌러주세요.", "warn")
+        _alert("다른 사용자가 편집 중입니다. '편집 권한' 버튼을 눌러 권한을 가져오세요.", "warn")
     elif status == "conflict":
         st.session_state.conflict3 = True
-        _alert("다른 기기에서 먼저 저장했습니다. 충돌 해결 패널에서 '최신 불러오기'를 눌러주세요.", "warn")
+        _alert("다른 기기에서 먼저 저장했습니다. '최신 불러오기'를 눌러주세요.", "warn")
     elif status == "forbidden":
-        _alert("접근이 제한되었습니다. 접수번호/UUID를 확인하거나 담당자에게 문의해주세요.", "bad")
+        _alert("접근이 제한되었습니다. 담당자에게 문의해주세요.", "bad")
     else:
         _alert(f"제출 실패: {result.get('message','알 수 없는 오류')}", "bad")
 
