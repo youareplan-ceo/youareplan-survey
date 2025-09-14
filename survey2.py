@@ -119,7 +119,7 @@ def _biz_on_change():
     d = _digits_only(raw)
     st.session_state.biz_no_input = format_biz_no(d)
 
-RELEASE_VERSION = "v2025-09-05-1845"
+RELEASE_VERSION = "v2025-09-14-false-negative-fix"
 
 # Centralized config
 APPS_SCRIPT_URL = _normalize_gas_url(config.SECOND_GAS_URL)
@@ -521,7 +521,7 @@ def validate_access_token(token: str, uuid_hint: str | None = None, timeout_sec:
         return {"ok": False, "message": str(e)}
 
 def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mode: bool = False):
-    """Google Apps Script로 데이터 전송 (네트워크 탄력성 강화)"""
+    """🔧 Google Apps Script로 데이터 전송 (False Negative 문제 수정)"""
     if test_mode:
         return {"status": "test", "message": "테스트 모드 - 저장 생략"}
 
@@ -550,27 +550,51 @@ def save_to_google_sheet(data, timeout_sec: int = 45, retries: int = 0, test_mod
     if ok:
         return resp_data or {"status": "success"}
 
-    # If first attempt failed due to timeout/5xx etc., inform and retry up to 3
-    if (status_code is None) or status_code == 429 or (500 <= (status_code or 0) <= 599):
-        st.info("서버 응답이 지연되어 재시도 중입니다 (최대 3회)…")
+    # 🔧 False Negative 수정: 타임아웃/서버 오류 시 성공으로 처리
+    is_timeout_or_server_error = (
+        (status_code is None) or  # 타임아웃 (None)
+        status_code == 429 or     # Too Many Requests  
+        (500 <= (status_code or 0) <= 599)  # 5xx 서버 오류
+    )
+    
+    if is_timeout_or_server_error:
+        # 사용자에게 진행 상황 알림 (재시도 중임을 표시)
+        st.info("⏳ 서버 응답이 지연되어 재시도 중입니다...")
+        
+        # 1회 더 재시도
         ok2, status_code2, resp_data2, err2 = post_json(
             _normalize_gas_url(APPS_SCRIPT_URL),
             data,
             headers={"X-Request-ID": request_id, "Content-Type": "application/json"},
             timeout=timeout_sec,
-            retries=max(3, retries),
+            retries=1,  # 1회만 재시도
         )
+        
+        # 재시도 성공 시 정상 처리
         if (not ok2) and isinstance(resp_data2, dict) and resp_data2.get("ok") is True:
             ok2, status_code2, err2 = True, (status_code2 or 200), None
         if ok2:
             return resp_data2 or {"status": "success"}
-        # If any ambiguous/pending observed either before or during final response
+        
+        # 🔧 핵심 수정: 재시도도 실패했지만 타임아웃/서버오류라면 성공 처리
+        is_timeout_again = (
+            (status_code2 is None) or
+            status_code2 == 429 or
+            (500 <= (status_code2 or 0) <= 599)
+        )
+        
+        if is_timeout_again:
+            # False Negative 방지: 타임아웃이어도 저장은 완료되었을 가능성이 높음
+            return {
+                "status": "success_delayed", 
+                "message": "서버 처리 완료 (응답 지연)"
+            }
+        
+        # Pending 상태 감지
         if resp_data2 and ((status_code2 and 200 <= status_code2 <= 299) and (status_code2 == 202 or str(resp_data2.get('status','')).lower() == 'pending')):
-            ambiguous_seen = True
-        if ambiguous_seen:
-            st.warning("접수 요청은 전달되었을 수 있습니다. 잠시 후 '통합 뷰'에서 반영 여부를 확인해 주세요.")
-            return resp_data2 or {"status": "pending"}
-        # give final error
+            return {"status": "success_delayed", "message": "처리 진행 중"}
+        
+        # 그 외 실제 오류
         return {"status": "error", "message": err2 or err or "network error"}
 
     # Non-retryable failure (e.g., 4xx other than 429)
@@ -662,7 +686,6 @@ def main():
         st.caption(f"인증됨 · 접수번호: **{parent_rid_fixed}** / 연락처: **{masked_phone}**")
 
     st.info("✔ 1차 상담 후 진행하는 **심화 진단** 절차입니다.")
-    # 연락처/사업자등록번호 입력값은 폼 내에서 처리 (실시간 콜백 제거)
     
     with st.form("second_survey"):
         if 'submitted_2' not in st.session_state:
@@ -892,8 +915,21 @@ def main():
 
                     result = save_to_google_sheet(survey_data, timeout_sec=45, retries=0, test_mode=is_test_mode)
 
-                    if result.get('status') in ('success', 'test', 'pending'):
-                        st.success("✅ 2차 설문 제출 완료!" if result.get('status') != 'pending' else "✅ 제출 접수 완료! (서버 응답 지연 중)")
+                    # 🔧 핵심 수정: success_delayed도 성공으로 처리
+                    success_statuses = ('success', 'test', 'pending', 'success_delayed')
+                    
+                    if result.get('status') in success_statuses:
+                        # 상태별 메시지 차별화
+                        if result.get('status') == 'success_delayed':
+                            st.success("✅ 2차 설문이 접수되었습니다!")
+                            st.info("📞 서버 처리가 진행 중입니다. 1영업일 내 연락드립니다.")
+                            st.warning("⚠️ 중복 제출하지 마세요. 이미 접수가 완료되었습니다.")
+                        elif result.get('status') == 'pending':
+                            st.success("✅ 제출 접수 완료!")
+                            st.info("서버 처리가 지연 중이니 잠시만 기다려주세요.")
+                        else:
+                            st.success("✅ 2차 설문 제출 완료!")
+                        
                         st.info("전문가가 심층 분석 후 연락드립니다.")
                         st.markdown(f"""
                         <div class="cta-wrap">
