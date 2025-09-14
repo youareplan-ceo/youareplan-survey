@@ -15,7 +15,7 @@ st.set_page_config(page_title="유아플랜 3차 심층 설문", page_icon="📝
 # ------------------------------
 # 환경/상수 설정  
 # ------------------------------
-RELEASE_VERSION_3 = "v2025-09-14-3-simplified-ui-fixed"
+RELEASE_VERSION_3 = "v2025-09-14-4-text-visibility-fixed"
 TIMEOUT_SEC = 45
 AUTO_SAVE_INTERVAL = 5000  # 5초 자동 저장
 
@@ -189,7 +189,7 @@ def _merge_snapshot_data(snap: Dict[str, Any]) -> None:
     st.session_state.lock_until = data.get("lock_until") or snap.get("lock_until", st.session_state.get("lock_until"))
 
 # ==============================
-# CSS 스타일 (UI 문제 수정)
+# CSS 스타일 (텍스트 가독성 강화)
 # ==============================
 def apply_styles():
     st.markdown("""
@@ -237,22 +237,6 @@ def apply_styles():
       /* 버튼 제거 (자동 저장이므로) */
       div[data-testid="stFormSubmitButton"] { display: none !important; }
 
-      /* 최종 완료 섹션 info 박스 색상 대비 개선 */
-      div[data-testid="stAlert"][data-baseweb="notification"] {
-        background: #F0F9FF !important;  /* 연한 파란색 배경 */
-        border: 1px solid #0EA5E9 !important;  /* 파란색 테두리 */
-        border-radius: 8px !important;
-      }
-      
-      div[data-testid="stAlert"][data-baseweb="notification"] div {
-        color: #0F172A !important;  /* 진한 검정 텍스트 */
-      }
-      
-      div[data-testid="stAlert"][data-baseweb="notification"] p {
-        color: #1E293B !important;  /* 진한 회색 텍스트 */
-        font-weight: 500 !important;
-      }
-
       /* 일반 버튼 스타일 */
       .stButton > button {
         background: var(--gov-navy) !important;
@@ -264,6 +248,36 @@ def apply_styles():
       }
       .stButton > button:hover {
         filter: brightness(0.95) !important;
+      }
+
+      /* 🎯 최종완료 섹션 커스텀 박스 스타일 */
+      .final-completion-box {
+        background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%) !important;
+        border: 2px solid #0EA5E9 !important;
+        border-radius: 12px !important;
+        padding: 20px !important;
+        margin: 16px 0 !important;
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1) !important;
+      }
+      
+      .final-completion-box h4 {
+        color: #0F172A !important;
+        font-weight: 700 !important;
+        font-size: 18px !important;
+        margin: 0 0 12px 0 !important;
+      }
+      
+      .final-completion-box p {
+        color: #1E293B !important;
+        font-weight: 500 !important;
+        font-size: 16px !important;
+        line-height: 1.6 !important;
+        margin: 0 !important;
+      }
+      
+      .final-completion-box strong {
+        color: #0F172A !important;
+        font-weight: 700 !important;
       }
 
       .cta-wrap{ margin-top:10px; padding:12px; border:1px solid var(--gov-border); border-radius:8px; background:#fafafa; }
@@ -300,6 +314,9 @@ def apply_styles():
         .gov-hero{ padding-top:8px; }
         textarea{ min-height: 180px !important; }
         .status-indicator { top: 10px; right: 10px; font-size: 20px; }
+        .final-completion-box { padding: 16px !important; margin: 12px 0 !important; }
+        .final-completion-box h4 { font-size: 16px !important; }
+        .final-completion-box p { font-size: 15px !important; }
       }
       textarea{ min-height: 140px !important; }
     </style>
@@ -504,7 +521,7 @@ def main():
     """, unsafe_allow_html=True)
 
 def render_simple_form(receipt_no: str, uuid: str, role: str):
-    """간소화된 설문 폼 (UI 개선)"""
+    """간소화된 설문 폼 (텍스트 가독성 개선)"""
     
     # 상태 표시 (우상단)
     status_icon = _status_indicator(st.session_state.save_status)
@@ -587,13 +604,20 @@ def render_simple_form(receipt_no: str, uuid: str, role: str):
     if role != "coach":
         st.caption("※ 고객도 코치 메모를 확인하고 의견을 추가할 수 있습니다.")
 
-    # 최종 제출 섹션 (색상 대비 개선)
+    # ✅ 최종 완료 섹션 (커스텀 HTML로 가독성 문제 해결)
     st.markdown("---")
     st.markdown("### 📨 최종 완료")
     
     col_final1, col_final2 = st.columns([2, 1])
     with col_final1:
-        st.info("💡 **모든 내용이 자동 저장됩니다.** 컨설턴트와 협의 후 최종 완료 버튼을 눌러주세요.")
+        # 기존 st.info 대신 커스텀 HTML 박스 사용
+        st.markdown("""
+        <div class="final-completion-box">
+            <h4>💡 자동 저장 완료</h4>
+            <p><strong>모든 내용이 실시간으로 자동 저장됩니다.</strong><br>
+            컨설턴트와 충분히 협의한 후 최종 완료 버튼을 눌러주세요.</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col_final2:
         if st.button("📨 최종 완료", type="primary"):
