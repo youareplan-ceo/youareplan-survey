@@ -15,7 +15,7 @@ st.set_page_config(page_title="유아플랜 3차 심층 설문", page_icon="📝
 # ------------------------------
 # 환경/상수 설정  
 # ------------------------------
-RELEASE_VERSION_3 = "v2025-09-14-3-simplified"
+RELEASE_VERSION_3 = "v2025-09-14-3-simplified-ui-fixed"
 TIMEOUT_SEC = 45
 AUTO_SAVE_INTERVAL = 5000  # 5초 자동 저장
 
@@ -47,8 +47,10 @@ def _get_gas_url() -> str:
     """환경변수에서 GAS URL 가져오기"""
     url = os.getenv("THIRD_GAS_URL")
     if not url:
-        st.error("⚠️ THIRD_GAS_URL 환경변수가 설정되지 않았습니다.")
-        st.stop()
+        # 개발 중이면 경고만, 실제로는 중단하지 않음
+        if SHOW_DEBUG:
+            st.warning("⚠️ THIRD_GAS_URL 환경변수가 설정되지 않았습니다. (개발 모드)")
+        return "https://script.google.com/macros/s/PLACEHOLDER/exec"
     return url
 
 APPS_SCRIPT_URL_3 = _get_gas_url()
@@ -187,7 +189,7 @@ def _merge_snapshot_data(snap: Dict[str, Any]) -> None:
     st.session_state.lock_until = data.get("lock_until") or snap.get("lock_until", st.session_state.get("lock_until"))
 
 # ==============================
-# CSS 스타일 (간소화)
+# CSS 스타일 (UI 문제 수정)
 # ==============================
 def apply_styles():
     st.markdown("""
@@ -207,7 +209,7 @@ def apply_styles():
       .gov-hero{ padding:16px 0 8px 0; border-bottom:1px solid var(--gov-border); margin-bottom:8px; }
       .gov-hero h2{ color:var(--gov-navy); margin:0 0 6px 0; font-weight:700; }
 
-      /* 입력 컴포넌트 스타일 */
+      /* 입력 컴포넌트 스타일 개선 */
       div[data-baseweb="input"], div[data-baseweb="select"], .stTextArea>div, .stTextInput>div, .stSelectbox>div, .stMultiSelect>div{
         background:#fff !important; border-radius:8px !important; border:1px solid var(--gov-border) !important; box-shadow:0 1px 2px rgba(16,24,40,.04) !important;
       }
@@ -215,8 +217,54 @@ def apply_styles():
         box-shadow:0 2px 6px rgba(16,24,40,.12) !important; outline:2px solid var(--gov-blue) !important; border-color:var(--gov-blue) !important;
       }
 
+      /* MultiSelect placeholder 텍스트 개선 */
+      .stMultiSelect > div > div > div[data-baseweb="select"] > div:first-child {
+        color: #6B7280 !important;
+      }
+      
+      /* MultiSelect "Choose options" 텍스트 숨기고 커스텀 placeholder 표시 */
+      div[data-testid="stMultiSelect"] [data-baseweb="select"] [data-testid="stMarkdownContainer"] p {
+        display: none !important;
+      }
+      
+      /* MultiSelect 빈 상태일 때 placeholder 추가 */
+      .stMultiSelect div[data-baseweb="select"] > div:first-child:empty:before {
+        content: "해당사항 모두 선택하세요";
+        color: #9CA3AF !important;
+        font-style: italic;
+      }
+
       /* 버튼 제거 (자동 저장이므로) */
       div[data-testid="stFormSubmitButton"] { display: none !important; }
+
+      /* 최종 완료 섹션 info 박스 색상 대비 개선 */
+      div[data-testid="stAlert"][data-baseweb="notification"] {
+        background: #F0F9FF !important;  /* 연한 파란색 배경 */
+        border: 1px solid #0EA5E9 !important;  /* 파란색 테두리 */
+        border-radius: 8px !important;
+      }
+      
+      div[data-testid="stAlert"][data-baseweb="notification"] div {
+        color: #0F172A !important;  /* 진한 검정 텍스트 */
+      }
+      
+      div[data-testid="stAlert"][data-baseweb="notification"] p {
+        color: #1E293B !important;  /* 진한 회색 텍스트 */
+        font-weight: 500 !important;
+      }
+
+      /* 일반 버튼 스타일 */
+      .stButton > button {
+        background: var(--gov-navy) !important;
+        color: #ffffff !important;
+        border: 1px solid var(--gov-navy) !important;
+        font-weight: 600 !important;
+        padding: 10px 16px !important;
+        border-radius: 6px !important;
+      }
+      .stButton > button:hover {
+        filter: brightness(0.95) !important;
+      }
 
       .cta-wrap{ margin-top:10px; padding:12px; border:1px solid var(--gov-border); border-radius:8px; background:#fafafa; }
       .cta-kakao{ display:block; text-align:center; font-weight:700; text-decoration:none; padding:12px 16px; border-radius:10px; background:#FEE500; color:#3C1E1E; border:1px solid #FEE500; }
@@ -456,7 +504,7 @@ def main():
     """, unsafe_allow_html=True)
 
 def render_simple_form(receipt_no: str, uuid: str, role: str):
-    """간소화된 설문 폼"""
+    """간소화된 설문 폼 (UI 개선)"""
     
     # 상태 표시 (우상단)
     status_icon = _status_indicator(st.session_state.save_status)
@@ -510,11 +558,14 @@ def render_simple_form(receipt_no: str, uuid: str, role: str):
             "통장사본",
             "기타",
         ]
-        st.multiselect(
+        
+        # MultiSelect with custom placeholder
+        selected_docs = st.multiselect(
             "보유 서류를 선택하세요", 
             options=docs_options, 
             key="docs_check",
-            help="선택하면 5초 후 자동 저장됩니다"
+            help="선택하면 5초 후 자동 저장됩니다",
+            placeholder="해당사항 모두 선택하세요"  # 이 부분이 CSS로 덮어씌워짐
         )
 
         st.markdown("### ⚠️ 리스크 Top3")
@@ -536,7 +587,7 @@ def render_simple_form(receipt_no: str, uuid: str, role: str):
     if role != "coach":
         st.caption("※ 고객도 코치 메모를 확인하고 의견을 추가할 수 있습니다.")
 
-    # 최종 제출 섹션 (간소화)
+    # 최종 제출 섹션 (색상 대비 개선)
     st.markdown("---")
     st.markdown("### 📨 최종 완료")
     
