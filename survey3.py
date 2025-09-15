@@ -27,6 +27,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 LIVE_SYNC_MS = _env_int("LIVE_SYNC_MS", 5000)  # 5초 실시간 동기화
+AUTO_SAVE_SECONDS = _env_int("AUTO_SAVE_SECONDS", 10)  # 자동 저장 간격 (기본 10초)
 SHOW_DEBUG = os.getenv("SHOW_DEBUG", "0") == "1"
 
 # ===== 브랜드/로고 설정 =====
@@ -492,9 +493,9 @@ def main():
 
     st.markdown("---")
 
-    # 실시간 자동 저장 (5초 간격)
+    # 실시간 자동 저장 (환경변수 간격)
     current_time = time.time()
-    if current_time - st.session_state.last_auto_save > 5:  # 5초마다
+    if current_time - st.session_state.last_auto_save > AUTO_SAVE_SECONDS:  # 환경변수로 제어
         auto_save_data(receipt_no, uuid, role)
         st.session_state.last_auto_save = current_time
 
