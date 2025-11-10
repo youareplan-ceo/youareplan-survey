@@ -397,8 +397,8 @@ def auto_save_data(receipt_no: str, uuid: str, role: str) -> None:
     if result.get("status") in ("success", "pending"):
         st.session_state.save_status = "saved"
         st.session_state.version3 = result.get("server_version", st.session_state.version3)
-        st.session_state.locked_by = result.get("lock_owner", st.session_state.locked_by)
-        st.session_state.lock_until = result.get("lock_until", st.session_state.lock_until)
+        st.session_state["locked_by"]  = result.get("lock_owner", st.session_state.get("locked_by"))
+        st.session_state["lock_until"] = result.get("lock_until", st.session_state.get("lock_until"))
     else:
         st.session_state.save_status = "error"
     
@@ -477,6 +477,8 @@ def main():
         st.session_state.syncing = False
     if "last_auto_save" not in st.session_state:
         st.session_state.last_auto_save = 0
+    if "locked_by" not in st.session_state:  st.session_state["locked_by"] = ""
+    if "lock_until" not in st.session_state: st.session_state["lock_until"] = ""
 
     # 간소화된 컨트롤 패널
     meta_cols = st.columns([2, 1.5, 1.2, 1.3])
