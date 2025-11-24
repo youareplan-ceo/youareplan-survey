@@ -197,6 +197,16 @@ st.markdown("""
     caret-color:#111111 !important;
   }
 
+  /* date_input 등 BaseWeb input 공통 스타일 */
+  div[data-baseweb="input"] input{
+    border:1px solid var(--gov-border) !important;
+    border-radius:6px !important;
+    background:#ffffff !important;
+    color:#111111 !important;
+    caret-color:#111111 !important;
+    box-shadow:none !important;
+  }
+
   .stTextInput > div,
   .stSelectbox > div,
   .stMultiSelect > div,
