@@ -15,7 +15,6 @@ def json_post(url, payload, headers=None, timeout=10, retries=0):
             except Exception:
                 data = resp.text
             ok = 200 <= sc < 300
-            # Return tuple: (ok, status_code, data, err)
             return ok, sc, data, None if ok else (
                 data if isinstance(data, str) else (data.get("message") if isinstance(data, dict) else "request failed")
             )
@@ -23,9 +22,7 @@ def json_post(url, payload, headers=None, timeout=10, retries=0):
             last_err = str(e)
     return False, None, None, last_err
 
-# ---- HTTP 멱등/재시도 래퍼 (1차 제출 안정화) ----
 def _json_post_with_resilience(url: str, payload: dict, timeout_sec: int = 30) -> dict:
-    # 1차 GAS 저장 규격: action 미포함, token='youareplan' 필수
     if 'action' in payload: payload.pop('action', None)
     if not payload.get('token'):
         payload['token'] = 'youareplan'
@@ -33,24 +30,20 @@ def _json_post_with_resilience(url: str, payload: dict, timeout_sec: int = 30) -
     ok, sc, data, err = json_post(url, payload, headers={"X-Request-ID": req_id, "Content-Type":"application/json"}, timeout=min(10, timeout_sec), retries=1)
     if ok:
         return data or {"status":"success"}
-    # 408/429/5xx는 재시도 여지
     if (sc is None) or sc==429 or (500 <= (sc or 0) <= 599):
         ok2, sc2, data2, err2 = json_post(url, payload, headers={"X-Request-ID": req_id, "Content-Type":"application/json"}, timeout=min(10, timeout_sec), retries=2)
         if ok2:
             return data2 or {"status":"success"}
         return {"status":"error", "message": err2 or err or (f"HTTP {sc2}" if sc2 else "request failed")}
-    # 기타는 에러 메시지 정리
     if isinstance(data, dict) and data.get('message'):
         return {"status":"error","message":str(data.get('message'))}
     return {"status":"error","message": err or (f"HTTP {sc}" if sc else "request failed")}
 
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, date
 import re
 import random
 import os
-# removed src import for compatibility
-
 
 st.set_page_config(page_title="유아플랜 정책자금 1차 상담", page_icon="📝", layout="centered")
 
@@ -58,7 +51,6 @@ st.set_page_config(page_title="유아플랜 정책자금 1차 상담", page_icon
 BRAND_NAME = "유아플랜"
 DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
 def _get_logo_url() -> str:
-    """로고 URL을 secrets/env에서 우선 읽고, 없으면 기본값 사용"""
     try:
         url = st.secrets.get("YOUAREPLAN_LOGO_URL", None)
         if url:
@@ -72,18 +64,28 @@ def _digits_only(s: str) -> str:
     return re.sub(r"[^0-9]", "", s or "")
 
 def format_phone_from_digits(d: str) -> str:
-    """11자리(010xxxxxxxx)면 자동으로 010-0000-0000 형태로 변환"""
     if len(d) == 11 and d.startswith("010"):
         return f"{d[0:3]}-{d[3:7]}-{d[7:11]}"
     return d
 
 def _phone_on_change():
-    # 사용자가 타이핑할 때 숫자만 남겨 하이픈 자동 삽입
     raw = st.session_state.get("phone_input", "")
     d = _digits_only(raw)
     st.session_state["phone_input"] = format_phone_from_digits(d)
 
-RELEASE_VERSION = "v2025-09-03-1"
+# ---- 개업연월 포맷 유틸 ----
+def format_open_date(s: str) -> str:
+    """YYYY 또는 YYYY-MM 형식으로 변환"""
+    d = _digits_only(s)
+    if len(d) == 4:  # YYYY
+        return d
+    elif len(d) == 6:  # YYYYMM
+        return f"{d[0:4]}-{d[4:6]}"
+    elif len(d) > 6:  # 너무 긴 경우 앞 6자리만
+        return f"{d[0:4]}-{d[4:6]}"
+    return s.strip()
+
+RELEASE_VERSION = "v2025-11-24-fields-added"
 
 # Apps Script URL (env-driven)
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
@@ -94,7 +96,7 @@ try:
     if not API_TOKEN:
         API_TOKEN = st.secrets.get("API_TOKEN", "youareplan")
 except:
-    API_TOKEN = "youareplan"  # fallback
+    API_TOKEN = "youareplan"
 
 # KakaoTalk Channel
 KAKAO_CHANNEL_ID = "_LWxexmn"
@@ -120,7 +122,7 @@ st.markdown("""
     --primary-color:#002855 !important;
   }
 
-  /* 상단 메뉴/툴바/푸터 숨김 (고객 화면 간결화) */
+  /* 상단 메뉴/툴바/푸터 숨김 */
   #MainMenu, footer { visibility: hidden !important; }
   header [data-testid="stToolbar"] { display: none !important; }
 
@@ -191,16 +193,15 @@ st.markdown("""
     border-radius:6px !important;
     background:#ffffff !important;
     box-shadow: none !important;
-    color:#111111 !important;           /* ← 텍스트 검정 고정 */
-    caret-color:#111111 !important;      /* ← 커서 색상 고정 */
+    color:#111111 !important;
+    caret-color:#111111 !important;
   }
 
-  /* 입력 컨테이너/포커스 그림자 완화 */
   .stTextInput > div,
   .stSelectbox > div,
   .stMultiSelect > div,
   .stTextArea > div {
-    box-shadow: none !important;           /* 외곽 그림자 제거 */
+    box-shadow: none !important;
     background:#ffffff !important;
   }
   .stTextInput input:focus,
@@ -208,15 +209,12 @@ st.markdown("""
   div[data-baseweb="select"] input:focus,
   div[data-baseweb="select"] [contenteditable="true"]:focus {
     outline: none !important;
-    box-shadow: none !important;           /* 포커스 시 과한 그림자 제거 */
+    box-shadow: none !important;
   }
 
-  /* 입력값은 진하게, placeholder는 연하게 보이도록 */
-  /* 기본 placeholder 색 */
   ::placeholder { color:#b7bec8 !important; opacity:1 !important; }
   input::placeholder, textarea::placeholder { color:#b7bec8 !important; }
   
-  /* 아직 입력 전(placeholder가 보일 때): 연한 색 */
   .stTextInput input:placeholder-shown,
   .stTextArea textarea:placeholder-shown,
   div[data-baseweb="input"] input:placeholder-shown,
@@ -226,7 +224,6 @@ st.markdown("""
     -webkit-text-fill-color:#b7bec8 !important;
   }
   
-  /* 값이 입력된 상태: 진한 본문 색 */
   .stTextInput input:not(:placeholder-shown),
   .stTextArea textarea:not(:placeholder-shown),
   div[data-baseweb="input"] input:not(:placeholder-shown),
@@ -237,7 +234,6 @@ st.markdown("""
     -webkit-text-fill-color:#111111 !important;
   }
 
-  /* Reduce overall input outline darkness */
   .stTextInput > div > div,
   .stSelectbox > div,
   .stMultiSelect > div,
@@ -246,8 +242,6 @@ st.markdown("""
     box-shadow: none !important;
   }
 
-
-  /* 자동완성 배경 제거 */
   input:-webkit-autofill,
   textarea:-webkit-autofill,
   select:-webkit-autofill{
@@ -268,7 +262,6 @@ st.markdown("""
   :root { color-scheme: light; }
   html, body, .stApp { background: #ffffff !important; color: #111111 !important; }
   [data-testid="stSidebar"] { background:#ffffff !important; color:#111111 !important; }
-  /* 텍스트/레이블 가독성 강화 */
   .stMarkdown, .stText, label, p, h1, h2, h3, h4, h5, h6 { color:#111111 !important; }
 
   /* CTA 버튼 */
@@ -295,7 +288,6 @@ st.markdown("""
 # Submit 버튼 강제 네이비
 st.markdown("""
 <style>
-  /* 제출 버튼 네이비 고정 */
   div[data-testid="stFormSubmitButton"] button,
   button[kind="primary"] {
     background:#002855 !important;
@@ -303,14 +295,12 @@ st.markdown("""
     color:#ffffff !important;
   }
   
-  /* 버튼 내부 텍스트 흰색 */
   div[data-testid="stFormSubmitButton"] button *,
   button[kind="primary"] * {
     color:#ffffff !important;
     fill:#ffffff !important;
   }
   
-  /* 호버 상태 */
   div[data-testid="stFormSubmitButton"] button:hover {
     background:#001a3a !important;
     border:1px solid #001a3a !important;
@@ -318,10 +308,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 강제: 제출 버튼/아이콘 텍스트 항상 흰색 & 기본 프라이머리 색상 고정 ---
 st.markdown("""
 <style>
-  :root { --primary-color:#002855 !important; } /* Streamlit theme primary */
+  :root { --primary-color:#002855 !important; }
 
   button[kind="primary"],
   button[data-testid="baseButton-primary"],
@@ -362,7 +351,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def _get_query_params():
-    """쿼리 파라미터 가져오기"""
     try:
         qp = st.query_params
         return {k: str(v) for k, v in qp.items()}
@@ -374,7 +362,6 @@ def _get_qp(name: str, default: str = "") -> str:
     return _get_query_params().get(name, default)
 
 def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 2, test_mode: bool = False):
-    """Google Apps Script로 데이터 전송"""
     if test_mode:
         return {"status": "test", "message": "테스트 모드 - 저장 생략"}
 
@@ -387,7 +374,6 @@ def save_to_google_sheet(data, timeout_sec: int = 12, retries: int = 2, test_mod
         )
         if isinstance(resp, dict) and resp.get('status') == 'success':
             return resp
-        # 표준화된 에러 반환
         if isinstance(resp, dict):
             return {"status": "error", "message": resp.get('message', 'unknown')}
         return {"status": "error", "message": "bad_response"}
@@ -422,12 +408,14 @@ POLICY_EXPERIENCES = [
     "경험 없음"
 ]
 
+# ★ 성별 옵션
+GENDERS = ["남성", "여성"]
+
 def main():
-    # saving state & aria-live for accessibility
     if "saving1" not in st.session_state:
         st.session_state.saving1 = False
     st.markdown('<div id="live-status-1" aria-live="polite" style="position:absolute;left:-9999px;height:1px;width:1px;overflow:hidden;">ready</div>', unsafe_allow_html=True)
-    # 상단 브랜드 바 렌더링 (로고 URL 없으면 텍스트 로고)
+    
     _logo_url = _get_logo_url()
     st.markdown(f"""
 <div class="brandbar">
@@ -458,11 +446,25 @@ def main():
         if 'submitted' not in st.session_state:
             st.session_state.submitted = False
 
-        # ── 기본 인적사항 (폼 내부로 이동) ──
+        # ── 기본 인적사항 ──
         name = st.text_input("👤 성함 (필수)", placeholder="홍길동", key="name_input").strip()
         phone_input = st.text_input("📞 연락처 (필수)", key="phone_input", placeholder="010-0000-0000")
         phone_error_placeholder = st.empty()
         st.caption("숫자만 입력하세요. 제출 시 010-0000-0000 형식으로 자동 포맷됩니다.")
+
+        # ★ 생년월일/성별 추가
+        col_birth, col_gender = st.columns(2)
+        with col_birth:
+            birthdate = st.date_input(
+                "🎂 생년월일 (필수)",
+                min_value=date(1900, 1, 1),
+                max_value=date.today(),
+                value=date(1980, 1, 1),
+                format="YYYY-MM-DD",
+                help="정책자금 우대조건(청년/시니어) 판단에 사용됩니다"
+            )
+        with col_gender:
+            gender = st.selectbox("⚧ 성별 (필수)", GENDERS, help="여성기업 우대조건 판단에 사용됩니다")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -470,9 +472,16 @@ def main():
             industry = st.selectbox("🏭 업종 (필수)", INDUSTRIES)
             business_type = st.selectbox("📋 사업자 형태 (필수)", BUSINESS_TYPES)
         with col2:
+            # ★ 개업연월 추가 (선택)
+            open_date_input = st.text_input(
+                "📅 개업연월 (선택)",
+                placeholder="예: 2020 또는 2020-03",
+                help="년도만 입력해도 됩니다. 예비창업자는 비워두세요."
+            )
             employee_count = st.selectbox("👥 직원 수 (필수)", EMPLOYEE_COUNTS)
             revenue = st.selectbox("💰 연간 매출 (필수)", REVENUES)
-            funding_amount = st.selectbox("💵 필요 자금 (필수)", FUNDING_AMOUNTS)
+        
+        funding_amount = st.selectbox("💵 필요 자금 (필수)", FUNDING_AMOUNTS)
 
         email = st.text_input("📧 이메일 (선택)", placeholder="email@example.com")
         
@@ -521,7 +530,7 @@ def main():
                 st.markdown(
                     """
                     **수집·이용 목적**: 상담 신청 확인, 자격 검토, 연락 및 안내  
-                    **수집 항목**: 성함, 연락처, 이메일(선택), 지역, 업종, 사업자 형태, 직원 수, 매출, 필요 자금, 정책자금 이용 경험, 자격 확인 항목  
+                    **수집 항목**: 성함, 연락처, 이메일(선택), 생년월일, 성별, 지역, 업종, 사업자 형태, 개업연월(선택), 직원 수, 매출, 필요 자금, 정책자금 이용 경험, 자격 확인 항목  
                     **보유·이용 기간**:  
                     - 상담 이력·사전컨설팅 관련 데이터: **3년**  
                     - 접속 로그·접근 기록 등 보안기록: **1년**  
@@ -556,6 +565,9 @@ def main():
             if not phone_valid:
                 phone_error_placeholder.error("연락처는 010-0000-0000 형식이어야 합니다.")
 
+            # ★ 개업연월 포맷팅
+            formatted_open_date = format_open_date(open_date_input) if open_date_input.strip() else ""
+
             if not name or not formatted_phone:
                 st.error("성함과 연락처는 필수입니다.")
                 st.session_state.submitted = False
@@ -570,13 +582,17 @@ def main():
                 with st.spinner("처리 중..."):
                     receipt_no = f"YP{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
                     
+                    # ★ 생년월일/성별/개업연월 추가
                     survey_data = {
                         'name': name,
                         'phone': formatted_phone,
                         'email': email,
+                        'birthdate': birthdate.strftime('%Y-%m-%d'),  # ★ 추가
+                        'gender': gender,  # ★ 추가
                         'region': region,
                         'industry': industry,
                         'business_type': business_type,
+                        'open_date': formatted_open_date,  # ★ 추가
                         'employee_count': employee_count,
                         'revenue': revenue,
                         'funding_amount': funding_amount,
@@ -605,7 +621,6 @@ def main():
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # 제출 성공 후 안내 및 5초 뒤 자동 복귀 (referrer → history.back → ?return_to → /)
                         st.markdown(
                             """
 <div id="auto-exit-note" style="margin-top:10px;padding:12px;border:1px solid var(--gov-border);border-radius:8px;background:#f5f7fa;color:#111;">
@@ -620,7 +635,6 @@ def main():
   }
   var left=3, el=document.getElementById('exit_count');
   var t=setInterval(function(){ left--; if(el){ el.textContent=left; } if(left<=0){ clearInterval(t); go(); } }, 1000);
-  // Hard fallback in case intervals are throttled
   setTimeout(go, 3500);
 })();
 </script>
@@ -637,20 +651,19 @@ if __name__ == "__main__":
     main()
 
 
-# ---- 1차 제출용 통합 함수 (폼 dict -> GAS 규격 payload) ----
+# ---- 1차 제출용 통합 함수 ----
 def submit_first_survey(form: dict) -> dict:
-    """    1차 폼을 받아 GAS에 저장한다.
-    필수: token='youareplan' (action 없음), 응답 {status, receipt_no, uuid} 기대.
-    """
     payload = {
-        # 저장 전송: action 미포함
         "token": "youareplan",
         "name": (form.get("name") or "").strip(),
         "phone": (form.get("phone") or "").strip(),
         "email": (form.get("email") or "미입력").strip(),
+        "birthdate": (form.get("birthdate") or "").strip(),  # ★ 추가
+        "gender": (form.get("gender") or "").strip(),  # ★ 추가
         "region": (form.get("region") or "").strip(),
         "industry": (form.get("industry") or "").strip(),
         "business_type": (form.get("business_type") or "").strip(),
+        "open_date": (form.get("open_date") or "").strip(),  # ★ 추가
         "employee_count": (form.get("employee_count") or "").strip(),
         "revenue": (form.get("revenue") or "").strip(),
         "funding_amount": (form.get("funding_amount") or "").strip(),
@@ -661,9 +674,7 @@ def submit_first_survey(form: dict) -> dict:
         "privacy_agree": bool(form.get("privacy_agree")),
         "marketing_agree": bool(form.get("marketing_agree")),
     }
-    # 전송
     resp = _json_post_with_resilience(APPS_SCRIPT_URL, payload, timeout_sec=30)
-    # 표준화
     ok = (isinstance(resp, dict) and (resp.get("status")=="success" or resp.get("ok") is True))
     return {
         "ok": ok,
