@@ -1,4 +1,3 @@
-# survey2.py
 import os
 import time
 import re
@@ -12,8 +11,9 @@ import streamlit as st
 # 1. 설정 및 유틸리티 (Config & Utils)
 # ==========================================
 class _Config:
-    SECOND_GAS_URL = os.getenv("SECOND_GAS_URL", "https://script.google.com/macros/s/YOUR_GAS_ID/exec")
-    FIRST_GAS_TOKEN_API_URL = os.getenv("FIRST_GAS_TOKEN_API_URL", "https://script.google.com/macros/s/YOUR_TOKEN_API_ID/exec")
+    # 배포 환경에 맞게 URL 수정 필요 시 여기서 수정
+    SECOND_GAS_URL = os.getenv("SECOND_GAS_URL", "https://script.google.com/macros/s/AKfycbz_XXXXXXXX/exec") 
+    FIRST_GAS_TOKEN_API_URL = os.getenv("FIRST_GAS_TOKEN_API_URL", "https://script.google.com/macros/s/AKfycbw_YYYYYYYY/exec")
     API_TOKEN_STAGE2 = os.getenv("API_TOKEN_2", "youareplan_stage2")
 
 config = _Config()
@@ -68,44 +68,143 @@ def format_biz_no(d: str) -> str:
     return d
 
 # ==========================================
-# 2. 앱 설정 및 스타일 (UI/UX)
+# 2. 앱 설정 및 스타일 (UI/UX) - 강력한 CSS 수정
 # ==========================================
 st.set_page_config(page_title="유아플랜 심화 진단", page_icon="📝", layout="centered")
 
-RELEASE_VERSION = "v2-2025-optimized-v2"
+RELEASE_VERSION = "v2-2025-optimized-fixed-ui"
 APPS_SCRIPT_URL = _normalize_gas_url(config.SECOND_GAS_URL)
 TOKEN_API_URL = _normalize_gas_url(config.FIRST_GAS_TOKEN_API_URL)
 API_TOKEN = config.API_TOKEN_STAGE2
 KAKAO_CHAT_URL = "https://pf.kakao.com/_LWxexmn/chat"
 
+# ★ CSS 수정: 다크모드/라이트모드 충돌 해결 및 가독성 확보
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-  html, body, .stApp { font-family: 'Noto Sans KR', sans-serif; background:#ffffff !important; color:#111 !important; }
   
-  .brandbar { padding:10px 14px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; }
-  .brandbar img { height: 40px; }
-  .gov-topbar { background:#002855; color:#fff; font-size:13px; padding:8px 14px; }
-  .gov-hero { padding: 20px 0; border-bottom:1px solid #e5e7eb; margin-bottom:16px; }
-  .gov-hero h2 { color:#002855; font-weight:700; margin:0; font-size: 22px; }
-  .gov-hero p { color:#4b5563; margin-top:4px; font-size: 14px; }
-
-  .stTextInput>div>div>input, .stDateInput>div>div>input, .stSelectbox>div>div {
-    background: #fff !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important;
+  /* 1. 기본 테마 강제 (흰 배경 / 검은 글씨) */
+  :root {
+    --primary-color: #002855;
+    --background-color: #ffffff;
+    --text-color: #111111;
   }
-  .stNumberInput input { background: #fff !important; }
   
+  html, body, .stApp {
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  /* 2. 텍스트 라벨 강제 검정 (다크모드에서도 보이게) */
+  .stMarkdown p, .stText, h1, h2, h3, h4, h5, h6, 
+  label, .stSelectbox label, .stTextInput label, .stNumberInput label {
+    color: #111111 !important;
+  }
+  
+  /* 3. 입력 필드 (Input) 스타일링 - 흰 배경, 검은 글씨, 회색 테두리 */
+  .stTextInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Number Input 입력창 */
+  .stNumberInput input {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-right: none !important; /* 버튼과 연결 */
+    border-radius: 8px 0 0 8px !important;
+  }
+
+  /* Number Input의 +/- 버튼 스타일 (스크린샷의 검은 블럭 해결) */
+  button[kind="secondary"] {
+    background-color: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+  button[kind="secondary"]:hover {
+    background-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+
+  /* 4. 상단 브랜드/헤더 영역 */
+  .brandbar { 
+    padding:10px 14px; 
+    border-bottom:1px solid #e5e7eb; 
+    display:flex; 
+    align-items:center; 
+    background-color: #ffffff;
+  }
+  .brandbar img { height: 40px; }
+  
+  .gov-topbar { 
+    background:#002855; 
+    color:#fff !important; /* 여기는 흰글씨 유지 */
+    font-size:13px; 
+    padding:8px 14px; 
+  }
+  .gov-topbar * { color: #fff !important; }
+
+  .gov-hero { 
+    padding: 20px 0; 
+    border-bottom:1px solid #e5e7eb; 
+    margin-bottom:16px; 
+    background-color: #ffffff;
+  }
+  .gov-hero h2 { 
+    color:#002855 !important; 
+    font-weight:700; 
+    margin:0; 
+    font-size: 22px; 
+  }
+  .gov-hero p { 
+    color:#4b5563 !important; 
+    margin-top:4px; 
+    font-size: 14px; 
+  }
+
+  /* 5. 제출 버튼 */
   div[data-testid="stFormSubmitButton"] button {
-    background: #002855 !important; border: none !important; color: white !important;
-    font-weight: 700 !important; padding: 12px !important; border-radius: 8px !important;
-    width: 100%; margin-top: 10px;
+    background: #002855 !important; 
+    border: none !important; 
+    color: white !important;
+    font-weight: 700 !important; 
+    padding: 12px !important; 
+    border-radius: 8px !important;
+    width: 100%; 
+    margin-top: 10px;
   }
   div[data-testid="stFormSubmitButton"] button:hover { opacity: 0.9; }
+  div[data-testid="stFormSubmitButton"] button * { color: white !important; }
 
-  .block-container { padding-top: 1rem !important; padding-bottom: 4rem !important; max-width: 800px; }
+  /* 6. 기타 컴포넌트 */
+  .block-container { 
+    padding-top: 1rem !important; 
+    padding-bottom: 4rem !important; 
+    max-width: 800px; 
+  }
   
-  /* 조건부 입력 강조 */
-  .conditional-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin: 8px 0; }
+  /* 조건부 박스 */
+  .conditional-box { 
+    background: #f8fafc; 
+    border: 1px solid #e2e8f0; 
+    border-radius: 8px; 
+    padding: 12px; 
+    margin: 8px 0; 
+  }
+  
+  /* 라디오/체크박스 라벨 */
+  .stRadio label, .stCheckbox label {
+    color: #111111 !important;
+  }
+  
+  /* 헬프 텍스트 (작은 글씨) */
+  .stMarkdown small, div[data-testid="stCaptionContainer"] {
+    color: #64748b !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,13 +214,16 @@ st.markdown("""
 def validate_access_token(token, uuid_hint=None):
     try:
         if "YOUR_GAS_ID" in TOKEN_API_URL:
-            return {"ok": False, "message": "API 설정이 필요합니다 (관리자 문의)."}
+            # 개발용: 토큰 API가 설정 안 되었을 때 테스트용 패스
+            # return {"ok": True, "parent_receipt_no": "TEST-1234", "uuid": str(uuid4())}
+             return {"ok": False, "message": "API 설정이 필요합니다 (관리자 문의)."}
             
         payload = {"action": "validate", "token": token, "api_token": "youareplan"}
         if uuid_hint: payload["uuid"] = uuid_hint
         
         ok, sc, data, err = post_json(TOKEN_API_URL, payload)
         
+        # 404 Fallback
         if sc == 404:
             r = requests.get(TOKEN_API_URL, params=payload, timeout=10)
             if r.status_code == 200: return r.json()
@@ -158,11 +260,20 @@ def main():
     magic_token = qp.get("t")
     uuid_hint = qp.get("u")
     
+    # 개발/테스트 편의를 위한 예외 처리 (배포 시 제거 가능)
+    # if not magic_token:
+    #     st.warning("⚠️ 테스트 모드로 진입합니다. (토큰 없음)")
+    #     magic_token = "TEST_TOKEN"
+    
     if not magic_token:
         st.error("잘못된 접근입니다. 담당자가 보내드린 링크를 다시 확인해주세요.")
         return
 
     v = validate_access_token(magic_token, uuid_hint)
+    
+    # 테스트용 우회 (실제 배포 시 주석 처리)
+    # if magic_token == "TEST_TOKEN": v = {"ok": True, "parent_receipt_no": "TEST-12345"}
+
     if not v.get("ok"):
         st.error(f"접속이 제한되었습니다: {v.get('message', '만료된 링크')}")
         return
@@ -297,24 +408,19 @@ def main():
                 "phone": format_phone_from_digits(clean_phone),
                 "biz_no": format_biz_no(clean_biz),
                 "company_name": company_name,
-                # 사업장 정보 (신규)
                 "store_type": store_type,
                 "deposit": deposit,
                 "monthly_rent": monthly_rent,
-                # 재무 (단위: 만원)
                 "startup_date": startup_date.strftime("%Y-%m-%d"),
                 "revenue_current": rev_current,
                 "revenue_y1": rev_y1,
                 "revenue_y2": rev_y2,
                 "capital": capital,
                 "debt": debt,
-                # 보증 이용 경험 (신규)
                 "guarantee_history": ", ".join(guarantee_history),
-                # 기술/인증
                 "research_lab": research_lab,
                 "certifications": ", ".join(certs),
                 "fund_purpose": ", ".join(fund_purpose),
-                # 리스크
                 "risk_tax": has_tax_issue,
                 "risk_overdue": has_overdue,
                 "magic_token": magic_token
