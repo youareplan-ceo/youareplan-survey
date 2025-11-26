@@ -49,7 +49,7 @@ st.set_page_config(page_title="유아플랜 정책자금 1차 상담", page_icon
 
 # ---- 브랜드 로고 설정 ----
 BRAND_NAME = "유아플랜"
-DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
+DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 def _get_logo_url() -> str:
     try:
         url = st.secrets.get("YOUAREPLAN_LOGO_URL", None)
@@ -85,7 +85,7 @@ def format_open_date(s: str) -> str:
         return f"{d[0:4]}-{d[4:6]}"
     return s.strip()
 
-RELEASE_VERSION = "v2025-11-24-fields-added"
+RELEASE_VERSION = "v2025-11-26-logo-navy"
 
 # Apps Script URL (env-driven)
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
@@ -130,7 +130,7 @@ st.markdown("""
   .brandbar{
     width:100%;
     display:flex; align-items:center; gap:10px;
-    padding:8px 14px; background:#ffffff;
+    padding:8px 14px; background:#002855;
     border-bottom:1px solid var(--gov-border);
   }
   .brandbar img{ height:48px; display:block; object-fit:contain; image-rendering:-webkit-optimize-contrast; }

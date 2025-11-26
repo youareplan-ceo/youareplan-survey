@@ -18,7 +18,7 @@ LOGO_URL = os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 # 구글 웹앱 URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzleqjuxb8XFkXJa8U0qdEOTx_GM80CcPQXfqdYmhVnzYOZjI6ATQCp8GberO3zqmrNMw/exec"
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
-RELEASE_VERSION = "v2025-11-26-fixed-repo-url"
+RELEASE_VERSION = "v2025-11-26-logo-navy"
 META_PIXEL_ID = "1372327777599495"
 
 # ==============================
@@ -66,12 +66,10 @@ st.markdown("""
       width: fit-content;
   }
 
-  /* 다크모드 감지: 배경을 투명하게 변경 (흰 로고가 잘 보이니까) */
+  /* 다크모드에서도 남색 배경 유지 (로고 가독성) */
   @media (prefers-color-scheme: dark) {
       .logo-wrapper {
-          background-color: transparent !important;
-          box-shadow: none !important;
-          padding: 10px 0 !important;
+          background-color: #002855 !important;
       }
   }
   
