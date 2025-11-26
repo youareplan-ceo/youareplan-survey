@@ -1,653 +1,470 @@
+# survey3.py - 유아플랜 3차 전략 수립 (회장님 전용)
+# v2025-11-26-slim
+
 import streamlit as st
 import requests
 from datetime import datetime
 import os
 import json
-from typing import Optional, Dict, Any, List
+import pandas as pd
+from typing import Optional, Dict, Any
 from uuid import uuid4
-import time
 
 # ==============================
-# 기본 페이지/레이아웃
+# 기본 설정
 # ==============================
-st.set_page_config(page_title="유아플랜 3차 심층 설문", page_icon="📝", layout="centered")
+st.set_page_config(page_title="유아플랜 3차 전략 수립", page_icon="📈", layout="wide")
 
-# ------------------------------
-# 환경/상수 설정  
-# ------------------------------
-RELEASE_VERSION_3 = "v2025-09-14-4-text-visibility-fixed"
-TIMEOUT_SEC = 45
-AUTO_SAVE_INTERVAL = 5000  # 5초 자동 저장
-
-# 환경변수 헬퍼
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except Exception:
-        return default
-
-LIVE_SYNC_MS = _env_int("LIVE_SYNC_MS", 5000)  # 5초 실시간 동기화
-AUTO_SAVE_SECONDS = _env_int("AUTO_SAVE_SECONDS", 10)  # 자동 저장 간격 (기본 10초)
+RELEASE_VERSION_3 = "v3-2025-11-26-slim"
 SHOW_DEBUG = os.getenv("SHOW_DEBUG", "0") == "1"
 
-# ===== 브랜드/로고 설정 =====
-BRAND_NAME = "유아플랜"
-DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
-
-def _get_logo_url() -> str:
-    try:
-        v = st.secrets.get("YOUAREPLAN_LOGO_URL")
-        if v:
-            return str(v)
-    except Exception:
-        pass
-    return os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
-
-# 🔧 3차 저장용 GAS 엔드포인트
-def _get_gas_url() -> str:
-    """환경변수에서 GAS URL 가져오기"""
-    url = os.getenv("THIRD_GAS_URL")
-    if not url:
-        # 개발 중이면 경고만, 실제로는 중단하지 않음
-        if SHOW_DEBUG:
-            st.warning("⚠️ THIRD_GAS_URL 환경변수가 설정되지 않았습니다. (개발 모드)")
-        return "https://script.google.com/macros/s/PLACEHOLDER/exec"
-    return url
-
-APPS_SCRIPT_URL_3 = _get_gas_url()
-
-# 3차 API 토큰
-def _get_api_token_3() -> str:
-    try:
-        tok = st.secrets.get("API_TOKEN_3")
-        if tok:
-            return tok
-    except Exception:
-        pass
-    tok = os.getenv("API_TOKEN_3")
-    return tok or "youareplan_stage3"
-
-# KakaoTalk Channel
+# 환경변수
+APPS_SCRIPT_URL_3 = os.getenv("THIRD_GAS_URL", "")
+API_TOKEN_3 = os.getenv("API_TOKEN_3", "youareplan_stage3")
 KAKAO_CHANNEL_ID = "_LWxexmn"
 KAKAO_CHAT_URL = f"https://pf.kakao.com/{KAKAO_CHANNEL_ID}/chat"
 
-# ==============================
-# HTTP 클라이언트 (내장)
-# ==============================
-def _http_post_json(url: str, payload: Dict[str, Any], headers: Dict = None, timeout: int = TIMEOUT_SEC) -> tuple[bool, Dict]:
-    """HTTP POST 요청 (성공여부, 응답데이터) 반환"""
-    try:
-        response = requests.post(
-            url,
-            json=payload,
-            headers=headers or {'Content-Type': 'application/json'},
-            timeout=timeout
-        )
-        response.raise_for_status()
-        return True, response.json()
-    except requests.exceptions.Timeout:
-        return False, {"status": "timeout", "message": "서버 응답 시간 초과"}
-    except requests.exceptions.RequestException as e:
-        return False, {"status": "error", "message": str(e)}
-    except json.JSONDecodeError:
-        return False, {"status": "error", "message": "잘못된 응답 형식"}
+# 로고
+DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
+def _get_logo_url():
+    return os.getenv("YOUAREPLAN_LOGO_URL", DEFAULT_LOGO_URL)
 
-def _json_post_quiet(url: str, payload: Dict[str, Any], timeout_sec: int = TIMEOUT_SEC) -> Dict[str, Any]:
-    """조용한 POST 요청 (메시지 표시 최소화)"""
-    request_id = str(uuid4())
-    headers = {"X-Request-ID": request_id}
+# ==============================
+# 스타일링
+# ==============================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+    html, body, .stApp { font-family: 'Noto Sans KR', sans-serif; background: #ffffff; }
     
-    ok, data = _http_post_json(url, payload, headers=headers, timeout=min(15, timeout_sec))
-    if ok:
-        return data
+    /* 사이드바/메뉴 숨김 */
+    #MainMenu, footer, [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
     
-    # 실패해도 조용히 처리
-    return {"status": "pending", "message": "서버 처리 중"}
-
-# ==============================
-# 유틸리티 함수
-# ==============================
-def _nz(s: Optional[str], alt: str = "") -> str:
-    s = "" if s is None else str(s)
-    return s.strip() if s.strip() else alt
-
-def _qp_get(qp: Dict[str, Any], key: str, default: str = "") -> str:
-    """쿼리 파라미터 안전 추출"""
-    try:
-        v = qp.get(key)
-        if isinstance(v, list):
-            v = v[0] if v else ""
-        return _nz(v, default)
-    except Exception:
-        return default
-
-def _badge(text: str) -> str:
-    return f"<span style='display:inline-block;background:#e8f1ff;color:#0b5bd3;border:1px solid #b6c2d5;padding:6px 10px;border-radius:999px;font-weight:600;'>{text}</span>"
-
-def _badge_progress(pct: int) -> str:
-    """진행률 배지 색상 단계화"""
-    try:
-        p = int(pct)
-    except Exception:
-        p = 0
-    if p >= 80:
-        bg, fg, bd = "#E6F4EA", "#065F46", "#A7D3B1"
-    elif p >= 40:
-        bg, fg, bd = "#FEF3C7", "#92400E", "#FCD34D"
-    else:
-        bg, fg, bd = "#F3F4F6", "#111827", "#E5E7EB"
-    return f"<span style='display:inline-block;background:{bg};color:{fg};border:1px solid {bd};padding:6px 10px;border-radius:999px;font-weight:700;'>진행률: {p}%</span>"
-
-def _status_indicator(status: str) -> str:
-    """조용한 상태 표시"""
-    if status == "saving":
-        return "💾"
-    elif status == "saved":
-        return "✅"
-    elif status == "syncing":
-        return "🔄"
-    else:
-        return "📝"
-
-def _calc_progress_pct() -> int:
-    """입력 진행률 계산"""
-    keys = ["collateral_profile", "tax_credit_summary", "loan_summary", "docs_check", "risk_top3"]
-    filled = 0
-    for k in keys:
-        v = st.session_state.get(k, None)
-        if isinstance(v, list):
-            if len(v) > 0:
-                filled += 1
-        else:
-            s = "" if v is None else str(v).strip()
-            if s:
-                filled += 1
-    return round((filled / len(keys)) * 100)
-
-# ==============================
-# 스냅샷 관리 (간소화)
-# ==============================
-def _merge_snapshot_data(snap: Dict[str, Any]) -> None:
-    """서버 스냅샷을 session_state에 조용히 병합"""
-    if not snap:
-        return
-    data = snap.get("data") or {}
+    /* 대시보드 카드 */
+    .dashboard-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-left: 5px solid #002855;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .metric-label { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .metric-value { font-size: 18px; font-weight: bold; color: #002855; }
     
-    # 본문 필드 병합
-    st.session_state["collateral_profile"] = _nz(data.get("collateral"))
-    st.session_state["tax_credit_summary"] = _nz(data.get("tax_credit"))
-    st.session_state["loan_summary"] = _nz(data.get("loan"))
-    docs_raw = data.get("docs") or ""
-    st.session_state["docs_check"] = [s.strip() for s in str(docs_raw).split(",") if s.strip()]
-    st.session_state["priority_exclusion"] = _nz(data.get("priority"))
-    st.session_state["risk_top3"] = _nz(data.get("risks"))
-    st.session_state["coach_notes"] = _nz(data.get("coach"))
+    /* 탭 스타일 */
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] { 
+        height: 50px; 
+        background-color: #f8f9fa; 
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] { 
+        background-color: #002855 !important; 
+        color: white !important;
+    }
     
-    # 메타 정보 병합
-    if "server_version" in snap:
-        st.session_state.version3 = snap.get("server_version", st.session_state.get("version3", 0))
-    st.session_state.locked_by = data.get("lock_owner") or snap.get("lock_owner", st.session_state.get("locked_by"))
-    st.session_state.lock_until = data.get("lock_until") or snap.get("lock_until", st.session_state.get("lock_until"))
-
-# ==============================
-# CSS 스타일 (텍스트 가독성 강화)
-# ==============================
-def apply_styles():
-    st.markdown("""
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-      html, body, [class*="css"] { font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif; }
-      :root { --gov-navy:#002855; --gov-blue:#0B5BD3; --gov-border:#cbd5e1; color-scheme: light !important; }
-      html, body { background:#FFFFFF !important; color:#0F172A !important; }
-      .stApp, [data-testid="stAppViewContainer"] { background:#FFFFFF !important; color:#0F172A !important; }
-      [data-testid="stHeader"] { background:#FFFFFF !important; }
-      [data-testid="stSidebar"], [data-testid="collapsedControl"]{ display:none !important; }
-      .block-container{ max-width:1200px; margin:0 auto !important; padding-left:16px; padding-right:16px; }
-
-      .gov-topbar{ width:100%; background:var(--gov-navy); color:#fff !important; font-size:13px; padding:8px 14px; border-bottom:3px solid var(--gov-blue); }
-      .gov-topbar *{ color:#fff !important; }
-
-      .gov-hero{ padding:16px 0 8px 0; border-bottom:1px solid var(--gov-border); margin-bottom:8px; }
-      .gov-hero h2{ color:var(--gov-navy); margin:0 0 6px 0; font-weight:700; }
-
-      /* 입력 컴포넌트 스타일 개선 */
-      div[data-baseweb="input"], div[data-baseweb="select"], .stTextArea>div, .stTextInput>div, .stSelectbox>div, .stMultiSelect>div{
-        background:#fff !important; border-radius:8px !important; border:1px solid var(--gov-border) !important; box-shadow:0 1px 2px rgba(16,24,40,.04) !important;
-      }
-      div[data-baseweb="input"]:focus-within, div[data-baseweb="select"]:focus-within, .stTextArea>div:focus-within, .stTextInput>div:focus-within, .stSelectbox>div:focus-within, .stMultiSelect>div:focus-within{
-        box-shadow:0 2px 6px rgba(16,24,40,.12) !important; outline:2px solid var(--gov-blue) !important; border-color:var(--gov-blue) !important;
-      }
-
-      /* MultiSelect placeholder 텍스트 개선 */
-      .stMultiSelect > div > div > div[data-baseweb="select"] > div:first-child {
-        color: #6B7280 !important;
-      }
-      
-      /* MultiSelect "Choose options" 텍스트 숨기고 커스텀 placeholder 표시 */
-      div[data-testid="stMultiSelect"] [data-baseweb="select"] [data-testid="stMarkdownContainer"] p {
-        display: none !important;
-      }
-      
-      /* MultiSelect 빈 상태일 때 placeholder 추가 */
-      .stMultiSelect div[data-baseweb="select"] > div:first-child:empty:before {
-        content: "해당사항 모두 선택하세요";
-        color: #9CA3AF !important;
-        font-style: italic;
-      }
-
-      /* 버튼 제거 (자동 저장이므로) */
-      div[data-testid="stFormSubmitButton"] { display: none !important; }
-
-      /* 일반 버튼 스타일 */
-      .stButton > button {
-        background: var(--gov-navy) !important;
-        color: #ffffff !important;
-        border: 1px solid var(--gov-navy) !important;
-        font-weight: 600 !important;
-        padding: 10px 16px !important;
+    /* 버튼 */
+    .stButton > button {
+        background: #002855 !important;
+        color: white !important;
+        border: none !important;
         border-radius: 6px !important;
-      }
-      .stButton > button:hover {
-        filter: brightness(0.95) !important;
-      }
-
-      /* 🎯 최종완료 섹션 커스텀 박스 스타일 */
-      .final-completion-box {
-        background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%) !important;
-        border: 2px solid #0EA5E9 !important;
-        border-radius: 12px !important;
-        padding: 20px !important;
-        margin: 16px 0 !important;
-        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1) !important;
-      }
-      
-      .final-completion-box h4 {
-        color: #0F172A !important;
-        font-weight: 700 !important;
-        font-size: 18px !important;
-        margin: 0 0 12px 0 !important;
-      }
-      
-      .final-completion-box p {
-        color: #1E293B !important;
-        font-weight: 500 !important;
-        font-size: 16px !important;
-        line-height: 1.6 !important;
-        margin: 0 !important;
-      }
-      
-      .final-completion-box strong {
-        color: #0F172A !important;
-        font-weight: 700 !important;
-      }
-
-      .cta-wrap{ margin-top:10px; padding:12px; border:1px solid var(--gov-border); border-radius:8px; background:#fafafa; }
-      .cta-kakao{ display:block; text-align:center; font-weight:700; text-decoration:none; padding:12px 16px; border-radius:10px; background:#FEE500; color:#3C1E1E; border:1px solid #FEE500; }
-      .cta-kakao:hover{ filter:brightness(.97); }
-
-      /* 브랜드 바 */
-      .brandbar{
-        display:flex; align-items:center; gap:10px;
-        padding:10px 6px 4px 6px; margin:0 0 8px 0;
-        border-bottom:1px solid var(--gov-border);
-      }
-      .brandbar img{ height:48px; display:block; }
-
-      /* 상태 표시 (우상단 고정) */
-      .status-indicator {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        font-size: 24px;
-        z-index: 9999;
-        animation: pulse 2s infinite;
-      }
-      
-      @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-      }
-
-      /* 모바일 대응 */
-      @media (max-width: 640px){
-        .brandbar img{ height:64px; }
-        .gov-hero{ padding-top:8px; }
-        textarea{ min-height: 180px !important; }
-        .status-indicator { top: 10px; right: 10px; font-size: 20px; }
-        .final-completion-box { padding: 16px !important; margin: 12px 0 !important; }
-        .final-completion-box h4 { font-size: 16px !important; }
-        .final-completion-box p { font-size: 15px !important; }
-      }
-      textarea{ min-height: 140px !important; }
-    </style>
-    """, unsafe_allow_html=True)
+        font-weight: 600 !important;
+        padding: 10px 20px !important;
+    }
+    .stButton > button:hover { filter: brightness(1.1); }
+    
+    /* 섹션 헤더 */
+    .section-header {
+        background: #f1f5f9;
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin: 16px 0 12px 0;
+        font-weight: 600;
+        color: #334155;
+        border-left: 4px solid #002855;
+    }
+    
+    /* 리스크 배지 */
+    .risk-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 2px;
+    }
+    .risk-high { background: #fee2e2; color: #991b1b; }
+    .risk-low { background: #d1fae5; color: #065f46; }
+    
+    /* 브랜드바 */
+    .brandbar {
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .brandbar img { height: 48px; }
+</style>
+""", unsafe_allow_html=True)
 
 # ==============================
-# GAS 액션 함수 (간소화)
+# API 통신
 # ==============================
-def save_third_quiet(receipt_no: str, uuid: str, role: str, status: str, client_version: int, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """조용한 저장 (메시지 없이)"""
-    data = {
-        "token": _get_api_token_3(),
+def _http_post(url: str, payload: Dict[str, Any], timeout: int = 20) -> tuple[bool, Dict]:
+    """HTTP POST 요청"""
+    if not url:
+        return False, {"status": "error", "message": "GAS URL이 설정되지 않았습니다"}
+    try:
+        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=timeout)
+        return response.status_code == 200, response.json()
+    except Exception as e:
+        return False, {"status": "error", "message": str(e)}
+
+def load_client_data(receipt_no: str, uuid: str) -> tuple[bool, Dict]:
+    """GAS에서 1,2,3차 통합 데이터 로드"""
+    payload = {
+        "token": API_TOKEN_3,
+        "action": "get_client_data",
+        "receipt_no": receipt_no,
+        "uuid": uuid
+    }
+    return _http_post(APPS_SCRIPT_URL_3, payload)
+
+def load_snapshot(receipt_no: str, uuid: str) -> tuple[bool, Dict]:
+    """3차 저장 데이터 스냅샷 로드"""
+    payload = {
+        "token": API_TOKEN_3,
+        "action": "snapshot",
+        "receipt_no": receipt_no,
+        "uuid": uuid
+    }
+    return _http_post(APPS_SCRIPT_URL_3, payload)
+
+def save_strategy(receipt_no: str, uuid: str, data: Dict, status: str = "draft") -> tuple[bool, Dict]:
+    """3차 전략 데이터 저장"""
+    payload = {
+        "token": API_TOKEN_3,
         "action": "save",
         "receipt_no": receipt_no,
         "uuid": uuid,
-        "role": role,
         "status": status,
-        "client_version": client_version,
-        "payload": payload,
-        "edit_lock_take": True,  # 자동으로 편집권한 획득
-        "release_version": RELEASE_VERSION_3
+        "client_version": st.session_state.get("server_version", 0),
+        "release_version": RELEASE_VERSION_3,
+        "payload": data
     }
-    return _json_post_quiet(APPS_SCRIPT_URL_3, data, timeout_sec=15)
-
-def snapshot_third_quiet(receipt_no: str, uuid: str) -> Dict[str, Any]:
-    """조용한 스냅샷 조회"""
-    data = {
-        "token": _get_api_token_3(),
-        "action": "snapshot",
-        "receipt_no": receipt_no,
-        "uuid": uuid,
-    }
-    return _json_post_quiet(APPS_SCRIPT_URL_3, data, timeout_sec=10)
-
-def auto_save_data(receipt_no: str, uuid: str, role: str) -> None:
-    """자동 저장 (백그라운드)"""
-    if st.session_state.get("auto_saving", False):
-        return  # 이미 저장 중
-    
-    # 저장할 데이터가 있는지 확인
-    has_data = any([
-        st.session_state.get("collateral_profile", "").strip(),
-        st.session_state.get("tax_credit_summary", "").strip(),
-        st.session_state.get("loan_summary", "").strip(),
-        st.session_state.get("docs_check", []),
-        st.session_state.get("priority_exclusion", "").strip(),
-        st.session_state.get("risk_top3", "").strip(),
-        st.session_state.get("coach_notes", "").strip(),
-    ])
-    
-    if not has_data:
-        return  # 저장할 데이터 없음
-    
-    st.session_state.auto_saving = True
-    st.session_state.save_status = "saving"
-    
-    payload = {
-        "collateral_profile": _nz(st.session_state.get("collateral_profile")),
-        "tax_credit_summary": _nz(st.session_state.get("tax_credit_summary")),
-        "loan_summary": _nz(st.session_state.get("loan_summary")),
-        "docs_check": st.session_state.get("docs_check", []),
-        "priority_exclusion": _nz(st.session_state.get("priority_exclusion")),
-        "risk_top3": _nz(st.session_state.get("risk_top3")),
-        "coach_notes": _nz(st.session_state.get("coach_notes")),
-        "release_version_3": RELEASE_VERSION_3,
-    }
-    
-    result = save_third_quiet(
-        receipt_no=receipt_no,
-        uuid=uuid,
-        role=role,
-        status="draft",
-        client_version=st.session_state.get("version3", 0),
-        payload=payload
-    )
-    
-    if result.get("status") in ("success", "pending"):
-        st.session_state.save_status = "saved"
-        st.session_state.version3 = result.get("server_version", st.session_state.version3)
-        st.session_state["locked_by"]  = result.get("lock_owner", st.session_state.get("locked_by"))
-        st.session_state["lock_until"] = result.get("lock_until", st.session_state.get("lock_until"))
-    else:
-        st.session_state.save_status = "error"
-    
-    st.session_state.auto_saving = False
-
-def sync_with_server(receipt_no: str, uuid: str) -> None:
-    """서버와 조용한 동기화"""
-    if st.session_state.get("syncing", False):
-        return
-    
-    st.session_state.syncing = True
-    st.session_state.save_status = "syncing"
-    
-    snap = snapshot_third_quiet(receipt_no, uuid)
-    if snap.get("status") == "success":
-        remote_ver = int(snap.get("server_version") or 0)
-        local_ver = int(st.session_state.get("version3") or 0)
-        if remote_ver > local_ver:
-            _merge_snapshot_data(snap)
-    
-    st.session_state.save_status = "saved"
-    st.session_state.syncing = False
+    return _http_post(APPS_SCRIPT_URL_3, payload)
 
 # ==============================
-# 메인 함수 (간소화)
+# 유틸리티
+# ==============================
+def _fmt_money(val, unit="만원"):
+    """금액 포맷팅"""
+    try:
+        v = int(float(val or 0))
+        if v >= 10000:
+            return f"{v/10000:.1f}억{unit}"
+        return f"{v:,}{unit}"
+    except:
+        return str(val) if val else "-"
+
+def _risk_check(data: Dict) -> list:
+    """리스크 항목 체크"""
+    risks = []
+    if data.get("tax_status_1", "") not in ["", "체납 없음"]:
+        risks.append(("세금체납", "high"))
+    if data.get("credit_status_1", "") not in ["", "연체 없음"]:
+        risks.append(("금융연체", "high"))
+    if data.get("biz_status_1", "") not in ["", "정상 영업"]:
+        risks.append(("영업상태", "high"))
+    
+    # 부채비율 계산
+    try:
+        capital = float(data.get("capital", 0) or 0)
+        debt = float(data.get("debt", 0) or 0)
+        if capital > 0:
+            ratio = (debt / capital) * 100
+            if ratio > 200:
+                risks.append((f"부채비율 {ratio:.0f}%", "high"))
+    except:
+        pass
+    
+    if not risks:
+        risks.append(("리스크 없음", "low"))
+    return risks
+
+# ==============================
+# 메인
 # ==============================
 def main():
-    # 스타일 적용
-    apply_styles()
+    # 브랜드바
+    logo_url = _get_logo_url()
+    st.markdown(f'<div class="brandbar"><img src="{logo_url}" alt="로고"></div>', unsafe_allow_html=True)
     
-    st.markdown("<div class='gov-topbar'>대한민국 정부 협력 서비스</div>", unsafe_allow_html=True)
-
-    # 브랜드 바
-    _logo_url = _get_logo_url()
-    st.markdown(
-        f"""
-        <div class="brandbar">
-          {f'<img src="{_logo_url}" alt="{BRAND_NAME} 로고" />' if _logo_url else ''}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("""
-    <div class="gov-hero">
-      <h2>3차 심층 설문 (실시간 협업)</h2>
-      <p>입력과 동시에 자동 저장되며, 컨설턴트와 실시간으로 협업할 수 있습니다.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 쿼리 파라미터 처리
-    try:
-        qp = st.query_params
-        receipt_no = _qp_get(qp, "r", "")
-        uuid = _qp_get(qp, "u", "")
-        role = _qp_get(qp, "role", "client")
-    except Exception:
-        receipt_no, uuid, role = "", "", "client"
-
-    # 접근 가능 여부 확인
-    can_connect = bool(receipt_no and uuid)
-
-    if not can_connect:
-        st.error("접근 정보가 부족합니다. 담당자가 보낸 3차 링크로 접속해 주세요.")
-        st.markdown(f"<div class='cta-wrap'><a class='cta-kakao' href='{KAKAO_CHAT_URL}' target='_blank'>💬 링크 재발급 요청</a></div>", unsafe_allow_html=True)
+    st.title("📈 자금 조달 전략 수립 (3차)")
+    
+    # URL 파라미터
+    qp = st.query_params
+    receipt_no = qp.get("r", "")
+    uuid = qp.get("u", "")
+    
+    # 접근 검증
+    if not receipt_no or not uuid:
+        st.error("🚫 접근 정보가 없습니다. 2차 설문 완료 후 발급된 링크로 접속해주세요.")
+        st.markdown(f"[💬 카카오 문의하기]({KAKAO_CHAT_URL})")
         st.stop()
-
-    # 세션 상태 초기화
-    if "version3" not in st.session_state:
-        st.session_state.version3 = 0
-    if "save_status" not in st.session_state:
-        st.session_state.save_status = "ready"
-    if "auto_saving" not in st.session_state:
-        st.session_state.auto_saving = False
-    if "syncing" not in st.session_state:
-        st.session_state.syncing = False
-    if "last_auto_save" not in st.session_state:
-        st.session_state.last_auto_save = 0
-    if "locked_by" not in st.session_state:  st.session_state["locked_by"] = ""
-    if "lock_until" not in st.session_state: st.session_state["lock_until"] = ""
-
-    # 간소화된 컨트롤 패널
-    meta_cols = st.columns([2, 1.5, 1.2, 1.3])
-    with meta_cols[0]:
-        st.markdown(_badge(f"접수번호: {receipt_no}"), unsafe_allow_html=True)
-    with meta_cols[1]:
-        st.markdown(_badge(f"역할: {('코치' if role=='coach' else '고객')}"), unsafe_allow_html=True)
-    with meta_cols[2]:
-        progress_pct = _calc_progress_pct()
-        st.markdown(_badge_progress(progress_pct), unsafe_allow_html=True)
-    with meta_cols[3]:
-        status_icon = _status_indicator(st.session_state.save_status)
-        st.markdown(_badge(f"{status_icon} 자동 저장"), unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # 실시간 자동 저장 (환경변수 간격)
-    current_time = time.time()
-    if current_time - st.session_state.last_auto_save > AUTO_SAVE_SECONDS:  # 환경변수로 제어
-        auto_save_data(receipt_no, uuid, role)
-        st.session_state.last_auto_save = current_time
-
-    # 실시간 동기화 (10초 간격)
-    if current_time % 10 < 1:  # 약 10초마다
-        sync_with_server(receipt_no, uuid)
-
-    # 설문 폼 렌더링
-    render_simple_form(receipt_no, uuid, role)
-
-    # 자동 새로고침 (실시간 협업)
-    st.markdown(f"""
-    <script>
-    setTimeout(function(){{
-        // 입력 중이 아닐 때만 새로고침
-        var activeElement = document.activeElement;
-        var isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
-        
-        if (!isTyping) {{
-            location.reload();
-        }}
-    }}, {LIVE_SYNC_MS});
-    </script>
-    """, unsafe_allow_html=True)
-
-def render_simple_form(receipt_no: str, uuid: str, role: str):
-    """간소화된 설문 폼 (텍스트 가독성 개선)"""
     
-    # 상태 표시 (우상단)
-    status_icon = _status_indicator(st.session_state.save_status)
-    st.markdown(f'<div class="status-indicator">{status_icon}</div>', unsafe_allow_html=True)
+    # GAS URL 체크
+    if not APPS_SCRIPT_URL_3:
+        st.error("⚠️ 시스템 설정 오류: THIRD_GAS_URL이 설정되지 않았습니다.")
+        st.stop()
     
-    # 폼 제출 없는 입력 필드들
-    col_left, col_right = st.columns(2)
-
-    with col_left:
-        st.markdown("### 🧱 담보·보증 요약")
-        st.text_area(
-            "담보/보증 계획 (자산·평가·보증기관 등)",
-            placeholder="예: 부동산 담보 2.5억 평가 예정, 신용보증기금 보증 80%",
-            key="collateral_profile",
-            help="입력하면 5초 후 자동 저장됩니다"
-        )
-
-        st.markdown("### 🏦 대출/자금 현황")
-        st.text_area(
-            "기존 대출/금리/만기/상환계획",
-            placeholder="예: 기업은행 운전자금 1.2억 @ 5.2%, 만기 2026-06, 거치 12개월",
-            key="loan_summary",
-            help="입력하면 5초 후 자동 저장됩니다"
-        )
-
-        st.markdown("### 🏷 우대/제외 요건")
-        st.text_input(
-            "우대·제외 요건 (콤마로 구분)",
-            placeholder="예: 청년창업, 여성기업 / 제외 없음",
-            key="priority_exclusion",
-            help="입력하면 5초 후 자동 저장됩니다"
-        )
-
-    with col_right:
-        st.markdown("### 🧾 세무·신용 요약")
-        st.text_area(
-            "세무·신용 상태 (부가세·4대보험·체납/연체 등)",
-            placeholder="예: 부가세 과세매출 3.2억, 체납 없음, 4대보험 정상",
-            key="tax_credit_summary",
-            help="입력하면 5초 후 자동 저장됩니다"
-        )
-
-        st.markdown("### 📑 준비 서류 체크")
-        docs_options = [
-            "사업자등록증",
-            "재무제표(최근 2~3년)",
-            "부가세신고서",
-            "납세증명",
-            "4대보험 완납증명",
-            "매출증빙(세금계산서/카드내역)",
-            "통장사본",
-            "기타",
-        ]
-        
-        # MultiSelect with custom placeholder
-        selected_docs = st.multiselect(
-            "보유 서류를 선택하세요", 
-            options=docs_options, 
-            key="docs_check",
-            help="선택하면 5초 후 자동 저장됩니다",
-            placeholder="해당사항 모두 선택하세요"  # 이 부분이 CSS로 덮어씌워짐
-        )
-
-        st.markdown("### ⚠️ 리스크 Top3")
-        st.text_area(
-            "핵심 리스크 3가지(줄바꿈으로 구분)",
-            placeholder="예: 부채비율 270%\n담보 부족\n운전자금 부족",
-            key="risk_top3",
-            help="입력하면 5초 후 자동 저장됩니다"
-        )
-
-    st.markdown("### 🗒 코치 메모")
-    st.text_area(
-        "컨설턴트 코멘트/후속 액션",
-        placeholder="예: 부가세 신고서 원본 요청, 담보 감정 일정 예약",
-        key="coach_notes",
-        help="입력하면 5초 후 자동 저장됩니다"
-    )
-    
-    if role != "coach":
-        st.caption("※ 고객도 코치 메모를 확인하고 의견을 추가할 수 있습니다.")
-
-    # ✅ 최종 완료 섹션 (커스텀 HTML로 가독성 문제 해결)
-    st.markdown("---")
-    st.markdown("### 📨 최종 완료")
-    
-    col_final1, col_final2 = st.columns([2, 1])
-    with col_final1:
-        # 기존 st.info 대신 커스텀 HTML 박스 사용
-        st.markdown("""
-        <div class="final-completion-box">
-            <h4>💡 자동 저장 완료</h4>
-            <p><strong>모든 내용이 실시간으로 자동 저장됩니다.</strong><br>
-            컨설턴트와 충분히 협의한 후 최종 완료 버튼을 눌러주세요.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_final2:
-        if st.button("📨 최종 완료", type="primary"):
-            # 최종 제출 처리
-            result = save_third_quiet(
-                receipt_no=receipt_no,
-                uuid=uuid,
-                role=role,
-                status="final",
-                client_version=st.session_state.get("version3", 0),
-                payload={
-                    "collateral_profile": _nz(st.session_state.get("collateral_profile")),
-                    "tax_credit_summary": _nz(st.session_state.get("tax_credit_summary")),
-                    "loan_summary": _nz(st.session_state.get("loan_summary")),
-                    "docs_check": st.session_state.get("docs_check", []),
-                    "priority_exclusion": _nz(st.session_state.get("priority_exclusion")),
-                    "risk_top3": _nz(st.session_state.get("risk_top3")),
-                    "coach_notes": _nz(st.session_state.get("coach_notes")),
-                    "release_version_3": RELEASE_VERSION_3,
-                }
-            )
+    # 데이터 로드
+    if "client_data" not in st.session_state or st.session_state.get("loaded_receipt") != receipt_no:
+        with st.spinner("고객 정보를 불러오는 중..."):
+            ok, result = load_client_data(receipt_no, uuid)
             
-            if result.get("status") in ("success", "pending"):
-                st.success("✅ 최종 완료되었습니다! 전문가가 검토 후 연락드립니다.")
-                st.markdown(f"<div class='cta-wrap'><a class='cta-kakao' href='{KAKAO_CHAT_URL}' target='_blank'>💬 카카오 채널로 문의하기</a></div>", unsafe_allow_html=True)
+            if not ok or result.get("status") != "success":
+                st.error(f"❌ 데이터 로드 실패: {result.get('message', '알 수 없는 오류')}")
+                st.markdown(f"[💬 카카오 문의하기]({KAKAO_CHAT_URL})")
+                st.stop()
+            
+            st.session_state.client_data = result.get("data", {})
+            st.session_state.loaded_receipt = receipt_no
+            
+            # 3차 스냅샷 로드
+            ok2, snap = load_snapshot(receipt_no, uuid)
+            if ok2 and snap.get("data"):
+                st.session_state.third_data = snap.get("data", {})
+                st.session_state.server_version = snap.get("server_version", 0)
             else:
-                st.error("최종 완료 중 오류가 발생했습니다. 다시 시도해주세요.")
+                st.session_state.third_data = {}
+                st.session_state.server_version = 0
+    
+    c = st.session_state.client_data
+    t = st.session_state.get("third_data", {})
+    
+    # ===== 상단 대시보드 =====
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    
+    cols = st.columns(6)
+    cols[0].markdown(f"<div class='metric-label'>고객명</div><div class='metric-value'>{c.get('name', '-')}</div>", unsafe_allow_html=True)
+    cols[1].markdown(f"<div class='metric-label'>기업명</div><div class='metric-value'>{c.get('company_name', '-')}</div>", unsafe_allow_html=True)
+    cols[2].markdown(f"<div class='metric-label'>업종</div><div class='metric-value'>{c.get('industry', '-')}</div>", unsafe_allow_html=True)
+    cols[3].markdown(f"<div class='metric-label'>올해 매출</div><div class='metric-value'>{_fmt_money(c.get('revenue_current'))}</div>", unsafe_allow_html=True)
+    cols[4].markdown(f"<div class='metric-label'>필요 자금</div><div class='metric-value'>{c.get('funding_need', '-')}</div>", unsafe_allow_html=True)
+    cols[5].markdown(f"<div class='metric-label'>접수번호</div><div class='metric-value'>{receipt_no}</div>", unsafe_allow_html=True)
+    
+    # 리스크 배지
+    risks = _risk_check(c)
+    risk_html = " ".join([f"<span class='risk-badge risk-{r[1]}'>{r[0]}</span>" for r in risks])
+    st.markdown(f"<div style='margin-top:12px;'><strong>리스크:</strong> {risk_html}</div>", unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ===== 탭 =====
+    tab_info, tab_strategy, tab_docs, tab_report = st.tabs(["📋 고객 정보", "🎯 전략 수립", "📑 서류 체크", "📤 실행 리포트"])
+    
+    # ----- TAB 1: 고객 정보 -----
+    with tab_info:
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            st.markdown('<div class="section-header">1차 설문 정보</div>', unsafe_allow_html=True)
+            st.text(f"이름: {c.get('name', '-')}")
+            st.text(f"연락처: {c.get('phone', '-')}")
+            st.text(f"이메일: {c.get('email', '-')}")
+            st.text(f"지역: {c.get('region', '-')}")
+            st.text(f"업종: {c.get('industry', '-')}")
+            st.text(f"사업형태: {c.get('business_type', '-')}")
+            st.text(f"직원수: {c.get('employee_count', '-')}")
+            st.text(f"매출규모: {c.get('revenue_range', '-')}")
+            st.text(f"필요자금: {c.get('funding_need', '-')}")
+            st.text(f"정책자금 경험: {c.get('policy_experience', '-')}")
+        
+        with col_right:
+            st.markdown('<div class="section-header">2차 설문 정보</div>', unsafe_allow_html=True)
+            st.text(f"기업명: {c.get('company_name', '-')}")
+            st.text(f"사업자번호: {c.get('biz_reg_no', '-')}")
+            st.text(f"창업일: {c.get('startup_date', '-')}")
+            st.text(f"점포형태: {c.get('store_type', '-')}")
+            st.text(f"보증금: {_fmt_money(c.get('deposit'))}")
+            st.text(f"월세: {_fmt_money(c.get('monthly_rent'))}")
+            st.text(f"올해 매출: {_fmt_money(c.get('revenue_current'))}")
+            st.text(f"전년 매출: {_fmt_money(c.get('revenue_y1'))}")
+            st.text(f"전전년 매출: {_fmt_money(c.get('revenue_y2'))}")
+            st.text(f"자본금: {_fmt_money(c.get('capital'))}")
+            st.text(f"부채: {_fmt_money(c.get('debt'))}")
+            st.text(f"보증이용: {c.get('guarantee_history', '-')}")
+            st.text(f"인증: {c.get('certifications', '-')}")
+            st.text(f"연구소: {c.get('research_lab', '-')}")
+            st.text(f"자금용도: {c.get('fund_purpose', '-')}")
+    
+    # ----- TAB 2: 전략 수립 -----
+    with tab_strategy:
+        st.markdown('<div class="section-header">자금 조달 목표</div>', unsafe_allow_html=True)
+        
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            target_agency = st.selectbox("공략 기관 (1순위)", 
+                ["중소벤처기업진흥공단", "신용보증기금", "기술보증기금", "소상공인시장진흥공단", "지역신용보증재단", "시중은행"],
+                key="target_agency")
+            target_amount = st.number_input("목표 금액 (만원)", value=10000, step=1000, key="target_amount")
+        with col_s2:
+            fund_name = st.text_input("세부 자금명", placeholder="예: 청년전용창업자금", key="fund_name",
+                value=t.get("priority", ""))
+            expect_date = st.date_input("자금 집행 목표일", key="expect_date")
+
+        st.markdown('<div class="section-header">담보·보증 계획</div>', unsafe_allow_html=True)
+        collateral = st.text_area("담보/보증 계획", height=80, key="collateral",
+            value=t.get("collateral", ""),
+            placeholder="예: 부동산 담보 2억 평가 예정, 신보 80% 보증 신청")
+
+        st.markdown('<div class="section-header">핵심 전략 포인트</div>', unsafe_allow_html=True)
+        strategy_points = st.text_area("심사역 어필 포인트", height=100, key="strategy_points",
+            value=t.get("coach", ""),
+            placeholder="- 최근 매출 성장세 (YoY 30%)\n- 벤처인증 보유\n- 신규 거래처 계약 예정")
+
+        st.markdown('<div class="section-header">리스크 대응</div>', unsafe_allow_html=True)
+        risk_plan = st.text_area("리스크 방어 논리", height=80, key="risk_plan",
+            value=t.get("risks", ""),
+            placeholder="- 부채비율 높으나 가수금 제외 시 200% 이내\n- 일시적 연체였으며 현재 정상")
+    
+    # ----- TAB 3: 서류 체크리스트 -----
+    with tab_docs:
+        st.markdown('<div class="section-header">필수 준비 서류</div>', unsafe_allow_html=True)
+        
+        # 기존 저장된 서류 체크 로드
+        saved_docs = t.get("docs", "")
+        saved_list = [d.strip() for d in saved_docs.split(",") if d.strip()] if saved_docs else []
+        
+        if "docs_df" not in st.session_state:
+            initial_docs = [
+                {"구분": "기본", "서류명": "사업자등록증", "상태": "준비완료" if "사업자등록증" in saved_list else "미비", "비고": ""},
+                {"구분": "재무", "서류명": "재무제표(최근3년)", "상태": "준비완료" if "재무제표" in saved_list else "미비", "비고": ""},
+                {"구분": "재무", "서류명": "부가세 과세표준증명", "상태": "미비", "비고": "홈택스 발급"},
+                {"구분": "세무", "서류명": "국세 완납증명", "상태": "미비", "비고": ""},
+                {"구분": "세무", "서류명": "지방세 완납증명", "상태": "미비", "비고": ""},
+                {"구분": "보험", "서류명": "4대보험 가입자명부", "상태": "미비", "비고": ""},
+                {"구분": "금융", "서류명": "통장사본(주거래)", "상태": "미비", "비고": ""},
+                {"구분": "기타", "서류명": "사업계획서", "상태": "미비", "비고": ""},
+            ]
+            st.session_state.docs_df = pd.DataFrame(initial_docs)
+
+        edited_df = st.data_editor(
+            st.session_state.docs_df,
+            column_config={
+                "상태": st.column_config.SelectboxColumn(
+                    "상태",
+                    options=["준비완료", "요청중", "미비", "해당없음"],
+                    required=True,
+                    width="small"
+                ),
+                "비고": st.column_config.TextColumn("특이사항", width="large")
+            },
+            num_rows="dynamic",
+            use_container_width=True,
+            key="docs_editor"
+        )
+        st.session_state.docs_df = edited_df
+    
+    # ----- TAB 4: 실행 리포트 -----
+    with tab_report:
+        st.markdown('<div class="section-header">고객 발송용 안내문</div>', unsafe_allow_html=True)
+        
+        # 미비 서류 필터
+        pending = edited_df[edited_df["상태"].isin(["미비", "요청중"])]
+        pending_str = "\n".join([f"  • {row['서류명']} ({row['비고']})" if row['비고'] else f"  • {row['서류명']}" 
+                                  for _, row in pending.iterrows()])
+        if not pending_str:
+            pending_str = "  (모든 서류 준비 완료)"
+
+        report_text = f"""[유아플랜 자금 조달 안내]
+
+{c.get('company_name', '')} {c.get('name', '')} 대표님께
+
+▣ 1차 목표
+- 기관: {target_agency}
+- 자금: {fund_name}
+- 금액: {_fmt_money(target_amount)}
+- 목표: {expect_date.strftime('%Y년 %m월')}
+
+▣ 준비 요청 서류
+{pending_str}
+
+▣ 전략 포인트
+{strategy_points if strategy_points else '(작성 필요)'}
+
+위 서류를 준비하여 회신 부탁드립니다.
+문의: 유아플랜 담당자
+"""
+        
+        st.text_area("아래 내용을 복사해서 카톡/메일로 발송하세요", value=report_text.strip(), height=350, key="report_output")
+        
+        # 전화 버튼
+        phone = c.get("phone", "")
+        if phone:
+            st.markdown(f"📞 [전화 걸기](tel:{phone})")
+    
+    # ===== 저장 버튼 =====
+    st.markdown("---")
+    col_save1, col_save2, col_save3 = st.columns([2, 2, 1])
+    
+    with col_save1:
+        if st.button("💾 임시 저장", use_container_width=True):
+            # 서류 체크 항목 추출
+            completed_docs = edited_df[edited_df["상태"] == "준비완료"]["서류명"].tolist()
+            
+            save_data = {
+                "collateral_profile": collateral,
+                "tax_credit_summary": "",  # 필요시 추가
+                "loan_summary": "",  # 필요시 추가
+                "docs_check": completed_docs,
+                "priority_exclusion": f"{target_agency} / {fund_name}",
+                "risk_top3": risk_plan,
+                "coach_notes": strategy_points
+            }
+            
+            ok, res = save_strategy(receipt_no, uuid, save_data, status="draft")
+            if ok and res.get("status") == "success":
+                st.session_state.server_version = res.get("server_version", 0)
+                st.success("✅ 임시 저장 완료")
+            else:
+                st.error(f"저장 실패: {res.get('message', '오류')}")
+    
+    with col_save2:
+        if st.button("📨 최종 완료", type="primary", use_container_width=True):
+            completed_docs = edited_df[edited_df["상태"] == "준비완료"]["서류명"].tolist()
+            
+            save_data = {
+                "collateral_profile": collateral,
+                "tax_credit_summary": "",
+                "loan_summary": "",
+                "docs_check": completed_docs,
+                "priority_exclusion": f"{target_agency} / {fund_name}",
+                "risk_top3": risk_plan,
+                "coach_notes": strategy_points
+            }
+            
+            ok, res = save_strategy(receipt_no, uuid, save_data, status="final")
+            if ok and res.get("status") == "success":
+                st.success("✅ 최종 완료! 고객에게 안내문을 발송하세요.")
+                st.balloons()
+            else:
+                st.error(f"저장 실패: {res.get('message', '오류')}")
+    
+    with col_save3:
+        st.markdown(f"[💬 카카오]({KAKAO_CHAT_URL})")
+    
+    # 디버그 모드
+    if SHOW_DEBUG:
+        with st.expander("🔧 디버그 정보"):
+            st.json({"receipt": receipt_no, "uuid": uuid[:8]+"...", "version": st.session_state.get("server_version", 0)})
+            st.json(c)
 
 if __name__ == "__main__":
     main()
