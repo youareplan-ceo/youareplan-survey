@@ -9,7 +9,7 @@ import os
 # ==============================
 # 1. 기본 설정
 # ==============================
-st.set_page_config(page_title="유아플랜 무료진단 신청", page_icon="💰", layout="centered")
+st.set_page_config(page_title="유아플랜 무료상담신청", page_icon="💰", layout="centered")
 
 BRAND_NAME = "유아플랜"
 # 로고 URL (기본값)
@@ -128,12 +128,22 @@ def main():
             <img src="{LOGO_URL}" alt="로고" style="width: 160px; height: auto; object-fit: contain;">
         </div>
         """, unsafe_allow_html=True)
-        
-    # 상단 디자인
+
+    # 상단 디자인 (직관적인 문구로 수정됨)
     st.markdown("""
     <div class="hero-box">
-        <h2>2025년 정책자금<br>무료 한도 조회</h2>
-        <p>1분 신청으로 우리 기업의 가능성을 확인하세요.<br>담당자가 즉시 분석해 드립니다.</p>
+        <h2 style="font-size: 1.6rem; margin-bottom: 5px;">
+            정책자금 <span style="margin: 0 5px;">·</span> 정부지원금
+        </h2>
+        
+        <h3 style="color: #FFD700; font-size: 1.4rem; font-weight: 800; margin: 0;">
+            무료 상담신청
+        </h3>
+
+        <p style="font-size: 0.95rem; margin-top: 15px; opacity: 0.9; font-weight: 400;">
+            우리 기업에 딱 맞는 자금,<br>
+            전문가가 1:1로 매칭해 드립니다.
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -163,7 +173,7 @@ def main():
         privacy_agree = st.checkbox("개인정보 수집 및 이용에 동의합니다.", value=True)
 
         # 제출 버튼
-        submitted = st.form_submit_button("🚀 무료 진단 신청하기")
+        submitted = st.form_submit_button("무료 진단 신청하기")
 
         if submitted:
             clean_phone = _digits_only(phone_raw)
