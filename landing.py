@@ -13,16 +13,16 @@ import time
 st.set_page_config(page_title="유아플랜 무료상담신청", page_icon="💰", layout="centered")
 
 BRAND_NAME = "유아플랜"
-# 로고 URL (기본값)
-DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
+# [핵심] 흰색 투명 로고 파일 URL 적용
+DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo_white.png"
 LOGO_URL = os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 
 # 구글 웹앱 URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzleqjuxb8XFkXJa8U0qdEOTx_GM80CcPQXfqdYmhVnzYOZjI6ATQCp8GberO3zqmrNMw/exec"
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
-RELEASE_VERSION = "v2025-11-26-final-design-v2"
+RELEASE_VERSION = "v2025-11-26-final-white-logo"
 
-# [핵심] 메타 픽셀 ID
+# [핵심] 메타 픽셀 ID (광고 성과 추적용)
 META_PIXEL_ID = "1372327777599495"
 
 # ==============================
@@ -49,7 +49,7 @@ st.markdown(pixel_code, unsafe_allow_html=True)
 
 
 # ==============================
-# 3. 스타일링 (고급 디자인)
+# 3. 스타일링 (스마트 로고 시스템 포함)
 # ==============================
 st.markdown("""
 <style>
@@ -59,13 +59,43 @@ st.markdown("""
   #MainMenu, footer, header { visibility: hidden !important; }
   .block-container { padding-top: 30px; padding-bottom: 50px; max-width: 600px; }
   
+  /* [핵심] 스마트 로고 컨테이너 스타일 */
+  /* 기본(라이트 모드): 흰색 로고를 위해 어두운 배경을 깔아줌 */
+  .logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0 auto 25px auto; /* 중앙 정렬 및 하단 여백 */
+      background-color: #002855; /* 브랜드 컬러 배경 */
+      padding: 12px 30px;
+      border-radius: 50px; /* 알약 모양 */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      width: fit-content;
+      transition: all 0.3s ease;
+  }
+
+  /* 다크 모드 감지: 배경을 투명하게 바꿔서 로고만 깔끔하게 보여줌 */
+  @media (prefers-color-scheme: dark) {
+      .logo-container {
+          background-color: transparent !important;
+          box-shadow: none !important;
+          padding: 10px 0 !important; /* 패딩도 줄여서 더 심플하게 */
+      }
+  }
+  /* Streamlit 전용 다크모드 감지 (더 정확함) */
+  [data-theme="dark"] .logo-container {
+      background-color: transparent !important;
+      box-shadow: none !important;
+      padding: 10px 0 !important;
+  }
+  
   /* 헤더 카드 디자인 */
   .hero-box {
     background: linear-gradient(135deg, #002855 0%, #005BAC 100%);
     padding: 30px 20px;
     border-radius: 15px;
     color: white;
-    text-align: center;
+    text-align: center; /* 기본 중앙 정렬 */
     margin-bottom: 30px;
     box-shadow: 0 4px 15px rgba(0, 91, 172, 0.2);
   }
@@ -128,40 +158,32 @@ def send_data(payload: dict) -> dict:
 # 5. 메인 화면 구성
 # ==============================
 def main():
-    # [핵심 수정] 로고 디자인 최적화 (슬림핏 배지 스타일)
+    # 1. 스마트 로고 영역 (CSS로 다크/라이트 모드 자동 대응)
     if LOGO_URL:
         st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 25px;">
-            <div style="
-                background-color: rgba(255, 255, 255, 0.95);
-                padding: 12px 35px;  /* 위아래 여백 줄이고 좌우 여백 조정 */
-                border-radius: 50px; /* 완전 둥근 알약 모양 */
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 그림자로 입체감 추가 */
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            ">
-                <img src="{LOGO_URL}" alt="로고" style="height: 45px; width: auto; object-fit: contain; display: block;">
-            </div>
+        <div class="logo-container">
+            <img src="{LOGO_URL}" alt="로고" style="height: 45px; width: auto; object-fit: contain; display: block;">
         </div>
         """, unsafe_allow_html=True)
 
-    # 헤더 문구
-    st.markdown("""
+    # 2. 헤더 문구 수정 (제목 깨짐 완벽 해결)
+    # HTML 코드를 별도 변수로 분리하여 안전하게 렌더링
+    header_html = """
     <div class="hero-box">
-        <h2 style="text-align: center; font-size: 1.6rem; margin: 0 0 5px 0; color: white; width: 100%;">
+        <h2 style="text-align: center; font-size: 1.6rem; margin: 0 0 5px 0; color: white; width: 100%; display: block;">
             정책자금 <span style="margin: 0 5px;">·</span> 정부지원금
         </h2>
         
-        <h3 style="text-align: center; color: #FFD700; font-size: 1.5rem; font-weight: 800; margin: 10px 0; width: 100%;">
+        <h3 style="text-align: center; color: #FFD700; font-size: 1.5rem; font-weight: 800; margin: 10px 0; width: 100%; display: block;">
             무료 상담신청
         </h3>
 
-        <p style="text-align: center; font-size: 1rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0;">
+        <p style="text-align: center; font-size: 1rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0; width: 100%;">
             우리 기업에 딱 맞는 자금,<br>전문가가 1:1로 매칭해 드립니다.
         </p>
     </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
 
     with st.form("landing_form"):
         st.markdown("**대표자 성함**")
