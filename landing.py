@@ -111,21 +111,18 @@ def send_data(payload: dict) -> dict:
 # 4. 메인 화면 (초간단 신청서)
 # ==============================
 def main():
+    # 1. 로고 영역 (슬림한 알약 모양으로 수정)
     if LOGO_URL:
         st.markdown(f"""
-        <div style="
-            display: flex; 
-            justify-content: center; 
-            margin-bottom: 20px;
-            background-color: rgba(255, 255, 255, 0.95); 
-            padding: 15px; 
-            border-radius: 15px; 
-            width: fit-content; 
-            margin-left: auto; 
-            margin-right: auto;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        ">
-            <img src="{LOGO_URL}" alt="로고" style="width: 160px; height: auto; object-fit: contain;">
+        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+            <div style="
+                background-color: rgba(255, 255, 255, 0.95);
+                padding: 10px 30px; 
+                border-radius: 30px; 
+                box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            ">
+                <img src="{LOGO_URL}" alt="로고" style="height: 40px; width: auto; object-fit: contain; display: block;">
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
