@@ -35,7 +35,21 @@ def _get_logo_url():
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-    html, body, .stApp { font-family: 'Noto Sans KR', sans-serif; background: #ffffff; }
+    
+    /* 기본 색상 강제 */
+    :root { color-scheme: light !important; }
+    html, body, .stApp { 
+        font-family: 'Noto Sans KR', sans-serif; 
+        background: #ffffff !important; 
+        color: #0F172A !important;
+    }
+    
+    /* 모든 텍스트 색상 강제 */
+    h1, h2, h3, h4, h5, h6, p, span, div, label, 
+    .stMarkdown, .stMarkdown p, .stText,
+    [data-testid="stHeading"], [data-testid="stText"] {
+        color: #0F172A !important;
+    }
     
     /* 사이드바/메뉴 숨김 */
     #MainMenu, footer, [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
@@ -49,8 +63,8 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .metric-label { font-size: 12px; color: #666; margin-bottom: 4px; }
-    .metric-value { font-size: 18px; font-weight: bold; color: #002855; }
+    .metric-label { font-size: 12px; color: #666 !important; margin-bottom: 4px; }
+    .metric-value { font-size: 18px; font-weight: bold; color: #002855 !important; }
     
     /* 탭 스타일 */
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
@@ -60,6 +74,7 @@ st.markdown("""
         border-radius: 8px 8px 0 0;
         padding: 10px 20px;
         font-weight: 500;
+        color: #0F172A !important;
     }
     .stTabs [aria-selected="true"] { 
         background-color: #002855 !important; 
@@ -84,7 +99,7 @@ st.markdown("""
         border-radius: 6px;
         margin: 16px 0 12px 0;
         font-weight: 600;
-        color: #334155;
+        color: #334155 !important;
         border-left: 4px solid #002855;
     }
     
@@ -97,8 +112,8 @@ st.markdown("""
         font-weight: 600;
         margin: 2px;
     }
-    .risk-high { background: #fee2e2; color: #991b1b; }
-    .risk-low { background: #d1fae5; color: #065f46; }
+    .risk-high { background: #fee2e2; color: #991b1b !important; }
+    .risk-low { background: #d1fae5; color: #065f46 !important; }
     
     /* 브랜드바 */
     .brandbar {
@@ -109,6 +124,12 @@ st.markdown("""
         border-bottom: 1px solid #e5e7eb;
     }
     .brandbar img { height: 48px; }
+    
+    /* 입력 필드 */
+    .stTextInput input, .stTextArea textarea, .stSelectbox select {
+        color: #0F172A !important;
+        background: #ffffff !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -421,8 +442,8 @@ def main():
             
             save_data = {
                 "collateral_profile": collateral,
-                "tax_credit_summary": "",  # 필요시 추가
-                "loan_summary": "",  # 필요시 추가
+                "tax_credit_summary": "",
+                "loan_summary": "",
                 "docs_check": completed_docs,
                 "priority_exclusion": f"{target_agency} / {fund_name}",
                 "risk_top3": risk_plan,
