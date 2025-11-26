@@ -276,6 +276,22 @@ st.markdown("""
   div[data-testid="stCaptionContainer"] {
     opacity: 0.7;
   }
+
+  /* ===== Placeholder 연하게 (실제 입력과 구분) ===== */
+  ::placeholder {
+    color: rgba(128,128,128,0.4) !important;
+    opacity: 1 !important;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: rgba(128,128,128,0.4) !important;
+  }
+  
+  /* 입력 전 상태 더 연하게 */
+  input:placeholder-shown,
+  textarea:placeholder-shown {
+    color: rgba(128,128,128,0.4) !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -392,12 +408,22 @@ def main():
         st.markdown("### 3. 재무 현황")
         st.caption("📅 사업개시일 기준으로 매출 입력칸이 표시됩니다.")
         
-        startup_date = st.date_input(
-            "사업 개시일", 
-            min_value=datetime(1950, 1, 1), 
-            value=datetime(2023, 1, 1),
-            format="YYYY/MM/DD"
-        )
+        st.write("**사업 개시일**")
+        col_y, col_m, col_d = st.columns(3)
+        current_year = datetime.now().year
+        with col_y:
+            start_year = st.selectbox("년", range(current_year, 1989, -1), format_func=lambda x: f"{x}년", index=2)
+        with col_m:
+            start_month = st.selectbox("월", range(1, 13), format_func=lambda x: f"{x}월")
+        with col_d:
+            start_day = st.selectbox("일", range(1, 32), format_func=lambda x: f"{x}일")
+        
+        # 날짜 유효성 검사 및 변환
+        import calendar
+        max_day = calendar.monthrange(start_year, start_month)[1]
+        if start_day > max_day:
+            start_day = max_day
+        startup_date = datetime(start_year, start_month, start_day)
         
         # 영업 기간 계산 (월 단위)
         today = datetime.now()
