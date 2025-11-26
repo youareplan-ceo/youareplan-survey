@@ -1,6 +1,10 @@
-# survey3.py - 유아플랜 3차 전략 수립 (회장님 전용)
-# v2025-11-26-slim
-
+# -*- coding: utf-8 -*-
+"""
+유아플랜 3차 전략 수립 – Streamlit (v3-2025-11-26-final)
+- 회장님 전용 대시보드
+- 투명 배경 CSS (다크/라이트 자동 적응)
+- 1/2/3차 통합 데이터 조회
+"""
 import streamlit as st
 import requests
 from datetime import datetime
@@ -15,7 +19,7 @@ from uuid import uuid4
 # ==============================
 st.set_page_config(page_title="유아플랜 3차 전략 수립", page_icon="📈", layout="wide")
 
-RELEASE_VERSION_3 = "v3-2025-11-26-slim"
+RELEASE_VERSION_3 = "v3-2025-11-26-final"
 SHOW_DEBUG = os.getenv("SHOW_DEBUG", "0") == "1"
 
 # 환경변수
@@ -25,111 +29,200 @@ KAKAO_CHANNEL_ID = "_LWxexmn"
 KAKAO_CHAT_URL = f"https://pf.kakao.com/{KAKAO_CHANNEL_ID}/chat"
 
 # 로고
-DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
-def _get_logo_url():
-    return os.getenv("YOUAREPLAN_LOGO_URL", DEFAULT_LOGO_URL)
+DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 
 # ==============================
-# 스타일링
+# 스타일링 (투명 배경 방식)
 # ==============================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-    
-    /* 기본 색상 강제 */
-    :root { color-scheme: light !important; }
-    html, body, .stApp { 
-        font-family: 'Noto Sans KR', sans-serif; 
-        background: #ffffff !important; 
-        color: #0F172A !important;
-    }
-    
-    /* 모든 텍스트 색상 강제 */
-    h1, h2, h3, h4, h5, h6, p, span, div, label, 
-    .stMarkdown, .stMarkdown p, .stText,
-    [data-testid="stHeading"], [data-testid="stText"] {
-        color: #0F172A !important;
-    }
-    
-    /* 사이드바/메뉴 숨김 */
-    #MainMenu, footer, [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
-    
-    /* 대시보드 카드 */
-    .dashboard-card {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-left: 5px solid #002855;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .metric-label { font-size: 12px; color: #666 !important; margin-bottom: 4px; }
-    .metric-value { font-size: 18px; font-weight: bold; color: #002855 !important; }
-    
-    /* 탭 스타일 */
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { 
-        height: 50px; 
-        background-color: #f8f9fa; 
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-        font-weight: 500;
-        color: #0F172A !important;
-    }
-    .stTabs [aria-selected="true"] { 
-        background-color: #002855 !important; 
-        color: white !important;
-    }
-    
-    /* 버튼 */
-    .stButton > button {
-        background: #002855 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-        padding: 10px 20px !important;
-    }
-    .stButton > button:hover { filter: brightness(1.1); }
-    
-    /* 섹션 헤더 */
-    .section-header {
-        background: #f1f5f9;
-        padding: 12px 16px;
-        border-radius: 6px;
-        margin: 16px 0 12px 0;
-        font-weight: 600;
-        color: #334155 !important;
-        border-left: 4px solid #002855;
-    }
-    
-    /* 리스크 배지 */
-    .risk-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        margin: 2px;
-    }
-    .risk-high { background: #fee2e2; color: #991b1b !important; }
-    .risk-low { background: #d1fae5; color: #065f46 !important; }
-    
-    /* 브랜드바 */
-    .brandbar {
-        display: flex;
-        align-items: center;
-        padding: 10px 0;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #e5e7eb;
-    }
-    .brandbar img { height: 48px; }
-    
-    /* 입력 필드 */
-    .stTextInput input, .stTextArea textarea, .stSelectbox select {
-        color: #0F172A !important;
-        background: #ffffff !important;
-    }
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  
+  html, body, .stApp {
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+
+  /* 상단 메뉴/푸터/사이드바 숨김 */
+  #MainMenu, footer { visibility: hidden !important; }
+  header [data-testid="stToolbar"] { display: none !important; }
+  [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
+
+  /* ===== 브랜드 요소 (고정색) ===== */
+  .brandbar {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: #002855;
+    border-bottom: 1px solid rgba(128,128,128,0.2);
+  }
+  .brandbar img { height: 48px; }
+
+  /* 대시보드 카드 - 반투명 */
+  .dashboard-card {
+    background: rgba(128,128,128,0.05);
+    border-left: 5px solid #002855;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  .metric-label { 
+    font-size: 12px; 
+    opacity: 0.6; 
+    margin-bottom: 4px; 
+  }
+  .metric-value { 
+    font-size: 18px; 
+    font-weight: bold; 
+    color: #002855; 
+  }
+  @media (prefers-color-scheme: dark) {
+    .metric-value { color: #60a5fa; }
+  }
+
+  /* 섹션 헤더 - 반투명 */
+  .section-header {
+    background: rgba(128,128,128,0.1);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 16px 0 12px 0;
+    font-weight: 600;
+    border-left: 4px solid #002855;
+  }
+  @media (prefers-color-scheme: dark) {
+    .section-header { border-left-color: #60a5fa; }
+  }
+
+  /* 리스크 배지 */
+  .risk-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 2px;
+  }
+  .risk-high { background: #fee2e2; color: #991b1b !important; }
+  .risk-low { background: #d1fae5; color: #065f46 !important; }
+
+  /* ===== 탭 스타일 ===== */
+  .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+  .stTabs [data-baseweb="tab"] { 
+    height: 50px; 
+    background: rgba(128,128,128,0.1); 
+    border-radius: 8px 8px 0 0;
+    padding: 10px 20px;
+    font-weight: 500;
+    color: inherit !important;
+  }
+  .stTabs [aria-selected="true"] { 
+    background: #002855 !important; 
+    color: white !important;
+  }
+
+  /* ===== 입력 필드 - 투명 배경 ===== */
+  .stTextInput > div > div > input,
+  .stNumberInput > div > div > input,
+  .stDateInput > div > div > input,
+  .stTextArea > div > div > textarea {
+    background: transparent !important;
+    color: inherit !important;
+    border: 1px solid rgba(128,128,128,0.3) !important;
+    border-radius: 8px !important;
+  }
+
+  /* SelectBox / MultiSelect 컨테이너 */
+  .stSelectbox > div,
+  .stMultiSelect > div,
+  div[data-baseweb="select"],
+  div[data-baseweb="select"] > div {
+    background: transparent !important;
+    color: inherit !important;
+    border-color: rgba(128,128,128,0.3) !important;
+  }
+
+  /* SelectBox 내부 입력창 */
+  div[data-baseweb="select"] input,
+  div[data-baseweb="select"] > div > div {
+    background: transparent !important;
+    color: inherit !important;
+  }
+
+  /* 드롭다운 팝오버 - 반투명 */
+  div[data-baseweb="popover"],
+  div[data-baseweb="menu"],
+  div[role="listbox"],
+  ul[role="listbox"] {
+    background: rgba(128,128,128,0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(128,128,128,0.2) !important;
+  }
+
+  /* 드롭다운 옵션 */
+  li[role="option"], div[role="option"] {
+    background: transparent !important;
+    color: inherit !important;
+  }
+  li[role="option"]:hover, div[role="option"]:hover {
+    background: rgba(128,128,128,0.2) !important;
+  }
+
+  /* 선택된 태그 - 파란색 고정 */
+  [data-baseweb="tag"] {
+    background: #2563eb !important;
+  }
+  [data-baseweb="tag"] span,
+  [data-baseweb="tag"] * {
+    color: #fff !important;
+  }
+
+  /* Number Input +/- 버튼 */
+  .stNumberInput button {
+    background: rgba(128,128,128,0.1) !important;
+    border: 1px solid rgba(128,128,128,0.3) !important;
+    color: inherit !important;
+  }
+
+  /* ===== 버튼 (고정색) ===== */
+  .stButton > button {
+    background: #002855 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    padding: 10px 20px !important;
+  }
+  .stButton > button:hover { filter: brightness(1.1); }
+
+  /* Data Editor - 투명 */
+  .stDataFrame, [data-testid="stDataFrame"] {
+    background: transparent !important;
+  }
+  .stDataFrame table {
+    background: transparent !important;
+  }
+  .stDataFrame th, .stDataFrame td {
+    background: rgba(128,128,128,0.05) !important;
+    color: inherit !important;
+    border-color: rgba(128,128,128,0.2) !important;
+  }
+
+  /* Placeholder 연하게 */
+  ::placeholder {
+    color: rgba(128,128,128,0.4) !important;
+    opacity: 1 !important;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: rgba(128,128,128,0.4) !important;
+  }
+
+  /* 캡션/도움말 */
+  div[data-testid="stCaptionContainer"] {
+    opacity: 0.7;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,6 +309,7 @@ def _risk_check(data: Dict) -> list:
     
     if not risks:
         risks.append(("리스크 없음", "low"))
+    
     return risks
 
 # ==============================
@@ -223,53 +317,35 @@ def _risk_check(data: Dict) -> list:
 # ==============================
 def main():
     # 브랜드바
-    logo_url = _get_logo_url()
-    st.markdown(f'<div class="brandbar"><img src="{logo_url}" alt="로고"></div>', unsafe_allow_html=True)
-    
-    st.title("📈 자금 조달 전략 수립 (3차)")
-    
-    # URL 파라미터
+    st.markdown(f'<div class="brandbar"><img src="{DEFAULT_LOGO_URL}" alt="유아플랜 로고"></div>', unsafe_allow_html=True)
+    st.title("📈 3차 전략 수립")
+
+    # 쿼리 파라미터
     qp = st.query_params
     receipt_no = qp.get("r", "")
     uuid = qp.get("u", "")
-    
-    # 접근 검증
+
     if not receipt_no or not uuid:
-        st.error("🚫 접근 정보가 없습니다. 2차 설문 완료 후 발급된 링크로 접속해주세요.")
-        st.markdown(f"[💬 카카오 문의하기]({KAKAO_CHAT_URL})")
-        st.stop()
-    
-    # GAS URL 체크
-    if not APPS_SCRIPT_URL_3:
-        st.error("⚠️ 시스템 설정 오류: THIRD_GAS_URL이 설정되지 않았습니다.")
-        st.stop()
-    
+        st.error("접근 정보가 없습니다. 담당자가 보낸 링크로 접속해주세요.")
+        st.markdown(f'<a href="{KAKAO_CHAT_URL}" target="_blank" style="display:inline-block;background:#FEE500;color:#3c1e1e;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">💬 링크 요청하기</a>', unsafe_allow_html=True)
+        return
+
     # 데이터 로드
-    if "client_data" not in st.session_state or st.session_state.get("loaded_receipt") != receipt_no:
-        with st.spinner("고객 정보를 불러오는 중..."):
-            ok, result = load_client_data(receipt_no, uuid)
-            
-            if not ok or result.get("status") != "success":
-                st.error(f"❌ 데이터 로드 실패: {result.get('message', '알 수 없는 오류')}")
-                st.markdown(f"[💬 카카오 문의하기]({KAKAO_CHAT_URL})")
-                st.stop()
-            
-            st.session_state.client_data = result.get("data", {})
-            st.session_state.loaded_receipt = receipt_no
-            
-            # 3차 스냅샷 로드
-            ok2, snap = load_snapshot(receipt_no, uuid)
-            if ok2 and snap.get("data"):
-                st.session_state.third_data = snap.get("data", {})
-                st.session_state.server_version = snap.get("server_version", 0)
-            else:
-                st.session_state.third_data = {}
-                st.session_state.server_version = 0
+    with st.spinner("고객 데이터를 불러오는 중..."):
+        ok, res = load_client_data(receipt_no, uuid)
     
-    c = st.session_state.client_data
-    t = st.session_state.get("third_data", {})
+    if not ok or res.get("status") != "success":
+        st.error(f"데이터 로드 실패: {res.get('message', '알 수 없는 오류')}")
+        return
+
+    c = res.get("data", {})
     
-    # ===== 상단 대시보드 =====
+    # 3차 스냅샷 로드
+    _, snap_res = load_snapshot(receipt_no, uuid)
+    t = snap_res.get("data") or {}
+    st.session_state.server_version = snap_res.get("server_version", 0)
+
+    # ===== 상단 요약 카드 =====
     st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
     
     cols = st.columns(6)
