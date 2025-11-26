@@ -111,6 +111,12 @@ def send_data(payload: dict) -> dict:
 # 4. 메인 화면 (초간단 신청서)
 # ==============================
 def main():
+    if LOGO_URL:
+        st.markdown(f"""
+        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+            <img src="{LOGO_URL}" style="width: 160px; max-width: 80%; object-fit: contain;">
+        </div>
+        """, unsafe_allow_html=True)
     # 상단 디자인
     st.markdown("""
     <div class="hero-box">
