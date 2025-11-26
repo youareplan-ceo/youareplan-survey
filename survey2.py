@@ -69,132 +69,56 @@ def format_biz_no(d: str) -> str:
     return d
 
 # ==========================================
-# 2. 앱 설정 및 스타일
+# 2. 앱 설정
 # ==========================================
 st.set_page_config(page_title="유아플랜 심화 진단", page_icon="📝", layout="centered")
 
-RELEASE_VERSION = "v2-2025-11-26-fixed-v2"
+RELEASE_VERSION = "v2-2025-11-26-fixed-v3"
 APPS_SCRIPT_URL = _normalize_gas_url(config.SECOND_GAS_URL)
 TOKEN_API_URL = _normalize_gas_url(config.FIRST_GAS_TOKEN_API_URL)
 API_TOKEN = config.API_TOKEN_STAGE2
 KAKAO_CHAT_URL = "https://pf.kakao.com/_LWxexmn/chat"
 
-# CSS - 라이트모드 강제 + SelectBox/MultiSelect 완전 수정
+# ==========================================
+# 3. CSS (완전 수정)
+# ==========================================
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
   
-  /* 라이트모드 강제 */
+  /* ===== 기본 설정 ===== */
   :root { color-scheme: light !important; }
   
-  html, body, .stApp, [data-testid="stAppViewContainer"] {
+  html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     font-family: 'Noto Sans KR', sans-serif !important;
     background-color: #ffffff !important;
     color: #0F172A !important;
   }
 
-  /* ========== SelectBox/MultiSelect 완전 수정 ========== */
-  /* 컨테이너 전체 (4단계 깊이까지) */
-  [data-baseweb="select"],
-  [data-baseweb="select"] > div,
-  [data-baseweb="select"] > div > div,
-  [data-baseweb="select"] > div > div > div,
-  [data-baseweb="select"] > div > div > div > div,
-  .stSelectbox [data-baseweb="select"],
-  .stSelectbox [data-baseweb="select"] > div,
-  .stSelectbox [data-baseweb="select"] > div > div,
-  .stMultiSelect [data-baseweb="select"],
-  .stMultiSelect [data-baseweb="select"] > div,
-  .stMultiSelect [data-baseweb="select"] > div > div {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    border-color: #cbd5e1 !important;
-  }
-  
-  /* 선택된 값 텍스트 */
-  [data-baseweb="select"] span,
-  [data-baseweb="select"] input,
-  [data-baseweb="select"] [data-testid="stMarkdownContainer"],
-  .stSelectbox span,
-  .stSelectbox div,
-  .stMultiSelect span {
-    color: #0F172A !important;
-    background: transparent !important;
-  }
-  
-  /* Placeholder 텍스트 */
-  [data-baseweb="select"] [aria-live="polite"],
-  [data-baseweb="select"] .css-1dimb5e-singleValue,
-  [data-baseweb="select"] .css-qc6sy-singleValue {
-    color: #6b7280 !important;
-  }
-
-  /* 드롭다운 팝오버 (옵션 목록) */
-  div[data-baseweb="popover"],
-  div[data-baseweb="popover"] > div,
-  div[data-baseweb="popover"] > div > div,
-  div[data-baseweb="menu"],
-  div[data-baseweb="menu"] > div,
-  div[role="listbox"],
-  div[role="listbox"] > div,
-  ul[role="listbox"],
-  ul[role="listbox"] > li {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #0F172A !important;
-  }
-  
-  /* 드롭다운 옵션 항목 */
-  li[role="option"],
-  div[role="option"],
-  [data-baseweb="menu"] li,
-  [data-baseweb="menu"] div {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #0F172A !important;
-  }
-  li[role="option"]:hover,
-  div[role="option"]:hover,
-  [data-baseweb="menu"] li:hover {
-    background: #f1f5f9 !important;
-    background-color: #f1f5f9 !important;
-  }
-  
-  /* 선택된 태그 (파란색 유지) */
-  [data-baseweb="tag"] {
-    background-color: #0B5BD3 !important;
-  }
-  [data-baseweb="tag"] span,
-  [data-baseweb="tag"] svg {
-    color: #ffffff !important;
-    fill: #ffffff !important;
-  }
-  
-  /* Clear/X 버튼 */
-  [data-baseweb="select"] svg,
-  .stSelectbox svg,
-  .stMultiSelect svg {
-    fill: #64748b !important;
-  }
-  /* ========== SelectBox/MultiSelect 끝 ========== */
-
-  /* 모든 텍스트/라벨 색상 */
+  /* ===== 모든 텍스트 색상 ===== */
   h1, h2, h3, h4, h5, h6, p, span, div, label,
-  .stMarkdown, .stMarkdown p, .stText,
+  .stMarkdown, .stMarkdown p, .stMarkdown span, .stMarkdown div,
+  .stText, [data-testid="stText"],
   [data-testid="stHeading"], [data-testid="stMarkdownContainer"],
+  [data-testid="stMarkdownContainer"] p,
   .stSelectbox label, .stTextInput label, .stNumberInput label,
   .stRadio label, .stCheckbox label, .stMultiSelect label,
   .stDateInput label, .stTextArea label {
     color: #0F172A !important;
   }
   
+  /* 라디오/체크박스 텍스트 */
   .stRadio label span, .stCheckbox label span,
+  .stRadio div[role="radiogroup"] label,
+  .stCheckbox div label,
   [data-testid="stCheckbox"] span,
-  [data-testid="stRadio"] span {
+  [data-testid="stRadio"] span,
+  [data-baseweb="radio"] + div,
+  [data-baseweb="checkbox"] + div {
     color: #0F172A !important;
   }
 
-  /* 일반 입력 필드 */
+  /* ===== 입력 필드 ===== */
   .stTextInput input, .stDateInput input, .stTextArea textarea {
     background-color: #ffffff !important;
     color: #0F172A !important;
@@ -202,14 +126,13 @@ st.markdown("""
     border-radius: 8px !important;
   }
   
-  /* Number Input */
   .stNumberInput input {
     background-color: #ffffff !important;
     color: #0F172A !important;
     border: 1px solid #cbd5e1 !important;
   }
-  .stNumberInput button,
-  [data-testid="stNumberInput"] button {
+  
+  .stNumberInput button, [data-testid="stNumberInput"] button {
     background-color: #f1f5f9 !important;
     border: 1px solid #cbd5e1 !important;
     color: #334155 !important;
@@ -218,7 +141,129 @@ st.markdown("""
     background-color: #e2e8f0 !important;
   }
 
-  /* 헤더 */
+  /* ===== SelectBox/MultiSelect 컨테이너 ===== */
+  [data-baseweb="select"],
+  [data-baseweb="select"] > div:first-child,
+  .stSelectbox > div > div,
+  .stMultiSelect > div > div {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+  }
+  
+  /* SelectBox/MultiSelect 내부 입력 영역 */
+  [data-baseweb="select"] > div > div,
+  [data-baseweb="select"] input,
+  .stSelectbox [data-baseweb="select"] > div,
+  .stMultiSelect [data-baseweb="select"] > div {
+    background-color: #ffffff !important;
+    color: #0F172A !important;
+  }
+
+  /* ===== 핵심: 선택된 태그 (파란 배경 강제) ===== */
+  [data-baseweb="tag"],
+  .stMultiSelect [data-baseweb="tag"],
+  div[data-baseweb="tag"],
+  span[data-baseweb="tag"] {
+    background-color: #2563eb !important;
+    background: #2563eb !important;
+    border: none !important;
+    border-radius: 4px !important;
+  }
+  
+  /* 태그 내부 텍스트 (흰색 강제) */
+  [data-baseweb="tag"] span,
+  [data-baseweb="tag"] > span,
+  [data-baseweb="tag"] div,
+  [data-baseweb="tag"] *:not(svg):not(path) {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+  
+  /* 태그 X 버튼 */
+  [data-baseweb="tag"] svg,
+  [data-baseweb="tag"] path {
+    fill: #ffffff !important;
+    color: #ffffff !important;
+  }
+
+  /* ===== 드롭다운 (팝오버) ===== */
+  div[data-baseweb="popover"],
+  div[data-baseweb="popover"] > div,
+  div[data-baseweb="popover"] ul,
+  div[data-baseweb="menu"],
+  div[data-baseweb="menu"] ul,
+  div[role="listbox"],
+  ul[role="listbox"] {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+  }
+  
+  /* 드롭다운 옵션 */
+  li[role="option"],
+  div[role="option"],
+  [data-baseweb="menu"] li {
+    background-color: #ffffff !important;
+    color: #0F172A !important;
+  }
+  
+  li[role="option"]:hover,
+  div[role="option"]:hover,
+  [data-baseweb="menu"] li:hover {
+    background-color: #f1f5f9 !important;
+  }
+  
+  /* Clear 버튼 (X) */
+  [data-baseweb="select"] > div > div:last-child svg {
+    fill: #64748b !important;
+  }
+
+  /* ===== Expander 완전 수정 ===== */
+  .streamlit-expanderHeader,
+  [data-testid="stExpander"] summary,
+  [data-testid="stExpander"] > div:first-child,
+  details summary,
+  details > summary {
+    background-color: #f8fafc !important;
+    background: #f8fafc !important;
+    color: #0F172A !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+  }
+  
+  .streamlit-expanderHeader span,
+  .streamlit-expanderHeader p,
+  .streamlit-expanderHeader div,
+  [data-testid="stExpander"] summary span,
+  [data-testid="stExpander"] summary p,
+  details summary span {
+    color: #0F172A !important;
+  }
+  
+  .streamlit-expanderHeader svg,
+  [data-testid="stExpander"] summary svg,
+  details summary svg {
+    fill: #0F172A !important;
+    color: #0F172A !important;
+  }
+  
+  .streamlit-expanderContent,
+  [data-testid="stExpander"] > div:last-child,
+  details > div {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #0F172A !important;
+    border: 1px solid #e2e8f0 !important;
+    border-top: none !important;
+  }
+  
+  .streamlit-expanderContent p,
+  .streamlit-expanderContent span,
+  .streamlit-expanderContent div,
+  [data-testid="stExpander"] > div:last-child p {
+    color: #0F172A !important;
+  }
+
+  /* ===== 헤더/브랜드 ===== */
   .brandbar { 
     padding: 10px 14px; 
     border-bottom: 1px solid #e5e7eb; 
@@ -254,11 +299,11 @@ st.markdown("""
     font-size: 14px;
   }
 
-  /* 제출 버튼 */
+  /* ===== 버튼 ===== */
   div[data-testid="stFormSubmitButton"] button {
     background: #002855 !important; 
     border: none !important; 
-    color: white !important;
+    color: #ffffff !important;
     font-weight: 700 !important; 
     padding: 12px !important; 
     border-radius: 8px !important;
@@ -268,39 +313,29 @@ st.markdown("""
   div[data-testid="stFormSubmitButton"] button:hover {
     opacity: 0.9;
   }
-  div[data-testid="stFormSubmitButton"] button * { 
-    color: white !important; 
+  div[data-testid="stFormSubmitButton"] button span,
+  div[data-testid="stFormSubmitButton"] button p,
+  div[data-testid="stFormSubmitButton"] button * {
+    color: #ffffff !important;
   }
 
-  /* 컨테이너 */
+  /* ===== 기타 ===== */
   .block-container { 
     padding-top: 1rem !important; 
     padding-bottom: 4rem !important;
     max-width: 800px; 
   }
   
-  /* 조건부 박스 */
-  .conditional-box {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 8px 0;
-  }
-  
-  /* 캡션 */
   .stCaption, div[data-testid="stCaptionContainer"], small {
     color: #64748b !important;
   }
   
-  /* Expander */
-  .streamlit-expanderHeader {
+  /* Info/Success/Error 박스 */
+  .stAlert, [data-testid="stAlert"] {
     color: #0F172A !important;
-    background: #f8fafc !important;
   }
-  .streamlit-expanderContent {
-    background: #ffffff !important;
-    color: #0F172A !important;
+  .stAlert p, [data-testid="stAlert"] p {
+    color: inherit !important;
   }
   
   /* 숨김 */
@@ -311,7 +346,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 로직 함수
+# 4. 로직 함수
 # ==========================================
 def validate_access_token(token, uuid_hint=None):
     try:
@@ -350,7 +385,7 @@ def save_survey_data(data):
     return {"status": "error", "message": err}
 
 # ==========================================
-# 4. 메인 화면
+# 5. 메인 화면
 # ==========================================
 def main():
     logo_url = os.getenv("YOUAREPLAN_LOGO_URL") or "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
@@ -396,13 +431,11 @@ def main():
         
         deposit, monthly_rent = 0, 0
         if store_type == "임차":
-            st.markdown('<div class="conditional-box">', unsafe_allow_html=True)
             col_dep, col_rent = st.columns(2)
             with col_dep:
                 deposit = st.number_input("보증금 (만원)", min_value=0, step=100)
             with col_rent:
                 monthly_rent = st.number_input("월세 (만원)", min_value=0, step=10)
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # 3. 재무 현황
         st.markdown("---")
@@ -475,7 +508,11 @@ def main():
         st.markdown("---")
         agree_privacy = st.checkbox("개인정보 수집 및 이용에 동의합니다. (필수)")
         with st.expander("동의 내용 보기"):
-            st.text("수집목적: 정책자금 상담 및 한도 심사\n보유기간: 3년")
+            st.markdown("""
+            **수집목적**: 정책자금 상담 및 한도 심사  
+            **보유기간**: 3년  
+            **수집항목**: 성함, 연락처, 사업자정보, 재무정보
+            """)
             
         submitted = st.form_submit_button("입력 완료 및 제출")
 
