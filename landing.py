@@ -5,30 +5,53 @@ from uuid import uuid4
 from datetime import datetime
 import random
 import os
-import time  # time 모듈을 상단으로 이동
+import time
 
 # ==============================
-# 1. 기본 설정
+# 1. 기본 설정 & 메타 픽셀 ID
 # ==============================
 st.set_page_config(page_title="유아플랜 무료상담신청", page_icon="💰", layout="centered")
 
 BRAND_NAME = "유아플랜"
-# 로고 URL (기본값)
+# 로고 URL
 DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
 LOGO_URL = os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 
-# -------------------------------------------------------------------------
-# [핵심] 구글 웹앱 URL (데이터 전송용)
-# -------------------------------------------------------------------------
+# 구글 웹앱 URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzleqjuxb8XFkXJa8U0qdEOTx_GM80CcPQXfqdYmhVnzYOZjI6ATQCp8GberO3zqmrNMw/exec"
-
-# 보안 토큰
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
+RELEASE_VERSION = "v2025-11-26-final-pixel-fixed"
 
-RELEASE_VERSION = "v2025-11-26-landing-fixed-logo"
+# [핵심] 메타 픽셀 ID (광고 성과 추적용)
+META_PIXEL_ID = "1372327777599495"
 
 # ==============================
-# 2. 스타일링 (신뢰감을 주는 디자인)
+# 2. 메타 픽셀 설치 (자동 추적)
+# ==============================
+# 페이지 방문 시 'PageView' 이벤트 자동 전송
+pixel_code = f"""
+<script>
+!function(f,b,e,v,n,t,s)
+{{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '{META_PIXEL_ID}');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id={META_PIXEL_ID}&ev=PageView&noscript=1"
+/></noscript>
+"""
+# 픽셀 코드를 헤더에 숨겨서 삽입
+st.markdown(pixel_code, unsafe_allow_html=True)
+
+
+# ==============================
+# 3. 스타일링 (고급 디자인)
 # ==============================
 st.markdown("""
 <style>
@@ -82,7 +105,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================
-# 3. 기능 로직
+# 4. 기능 로직
 # ==============================
 def _digits_only(s: str) -> str:
     return re.sub(r"[^0-9]", "", s or "")
@@ -104,57 +127,46 @@ def send_data(payload: dict) -> dict:
         return {"status": "success"}
 
 # ==============================
-# 4. 메인 화면 (초간단 신청서)
+# 5. 메인 화면 구성
 # ==============================
 def main():
-    # 1. 로고 영역 (크기 확대 수정됨)
+    # 1. 로고 영역 수정 (여백은 줄이고, 로고는 키움)
     if LOGO_URL:
         st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
             <div style="
                 background-color: rgba(255, 255, 255, 0.95);
-                padding: 15px 40px; 
-                border-radius: 50px; 
-                box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+                padding: 8px 25px; 
+                border-radius: 30px; 
+                box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             ">
-                <img src="{LOGO_URL}" alt="로고" style="height: 80px; width: auto; object-fit: contain; display: block;">
+                <img src="{LOGO_URL}" alt="로고" style="height: 55px; width: auto; object-fit: contain; display: block;">
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    # 상단 디자인 (HTML 구조 정돈)
-    # 주의: f-string이나 변수 삽입 없이 순수 HTML 문자열로 작성하여 깨짐 방지
+    # 2. 헤더 문구 수정 (HTML 깨짐 방지 및 가독성 개선)
     st.markdown("""
     <div class="hero-box">
-        <h2 style="font-size: 1.6rem; margin: 0 0 10px 0; color: white; font-weight: 800;">
-            정책자금 <span style="margin: 0 5px;">·</span> 정부지원금
-        </h2>
-        
-        <h3 style="color: #FFD700; font-size: 1.4rem; font-weight: 800; margin: 0;">
-            무료 상담신청
-        </h3>
-
-        <p style="font-size: 0.95rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0; line-height: 1.6;">
-            우리 기업에 딱 맞는 자금,<br>
-            전문가가 1:1로 매칭해 드립니다.
+        <h2 style="font-size: 1.6rem; margin: 0 0 5px 0; color: white;">정책자금 <span style="margin: 0 5px;">·</span> 정부지원금</h2>
+        <h3 style="color: #FFD700; font-size: 1.5rem; font-weight: 800; margin: 10px 0;">무료 상담신청</h3>
+        <p style="font-size: 1rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0;">
+            우리 기업에 딱 맞는 자금,<br>전문가가 1:1로 매칭해 드립니다.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
     with st.form("landing_form"):
-        # 질문 1: 성함
         st.markdown("**대표자 성함**")
         name = st.text_input("성함", placeholder="예: 홍길동", label_visibility="collapsed").strip()
         
-        st.write("") # 여백
+        st.write("") 
 
-        # 질문 2: 연락처
         st.markdown("**연락처**")
         phone_raw = st.text_input("연락처", placeholder="예: 01012345678", label_visibility="collapsed")
         
-        st.write("") # 여백
+        st.write("") 
 
-        # 질문 3: 사업자 형태
         st.markdown("**사업자 형태**")
         business_type = st.radio(
             "사업자 형태",
@@ -166,8 +178,7 @@ def main():
         st.markdown("---")
         privacy_agree = st.checkbox("개인정보 수집 및 이용에 동의합니다.", value=True)
 
-        # 제출 버튼
-        submitted = st.form_submit_button("무료 진단 신청하기")
+        submitted = st.form_submit_button("🚀 무료 진단 신청하기")
 
         if submitted:
             clean_phone = _digits_only(phone_raw)
@@ -177,7 +188,6 @@ def main():
             elif not privacy_agree:
                 st.error("개인정보 동의가 필요합니다.")
             else:
-                # 데이터 전송 준비
                 formatted_phone = format_phone(clean_phone)
                 receipt_no = f"YP{datetime.now().strftime('%m%d')}-{random.randint(1000, 9999)}"
 
@@ -199,21 +209,26 @@ def main():
 
                 with st.spinner("접수 중입니다..."):
                     send_data(payload)
+                    
+                    # [핵심] 신청 완료 시 'Lead' 이벤트 전송 (성과 측정용)
+                    st.markdown(f"""
+                        <script>
+                            fbq('track', 'Lead');
+                        </script>
+                    """, unsafe_allow_html=True)
                 
-                # 성공 화면
                 st.success("✅ 신청이 완료되었습니다!")
                 st.markdown(f"""
                     <div style="text-align: center; margin-top: 20px; padding: 20px; background-color: #f0f2f6; border-radius: 10px;">
                         <h3 style="color: #002855; margin:0;">담당자 배정 중...</h3>
-                        <p style="color: #555; margin-top:10px; line-height: 1.5;">
+                        <p style="color: #555; margin-top:10px;">
                             입력하신 <strong>{formatted_phone}</strong> 번호로<br>
                             담당자가 빠르게 연락드리겠습니다.
                         </p>
                     </div>
                 """, unsafe_allow_html=True)
-                time.sleep(600) # 화면 유지
+                time.sleep(600)
 
-    # 하단 보안 문구
     st.markdown("""
     <div class="security-note">
         🔒 입력하신 정보는 암호화되어 안전하게 보호됩니다.
