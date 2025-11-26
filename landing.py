@@ -13,22 +13,21 @@ import time
 st.set_page_config(page_title="유아플랜 무료상담신청", page_icon="💰", layout="centered")
 
 BRAND_NAME = "유아플랜"
-# 로고 URL
+# 로고 URL (기본값)
 DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
 LOGO_URL = os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 
 # 구글 웹앱 URL
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzleqjuxb8XFkXJa8U0qdEOTx_GM80CcPQXfqdYmhVnzYOZjI6ATQCp8GberO3zqmrNMw/exec"
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
-RELEASE_VERSION = "v2025-11-26-final-pixel-fixed"
+RELEASE_VERSION = "v2025-11-26-final-design-v2"
 
-# [핵심] 메타 픽셀 ID (광고 성과 추적용)
+# [핵심] 메타 픽셀 ID
 META_PIXEL_ID = "1372327777599495"
 
 # ==============================
 # 2. 메타 픽셀 설치 (자동 추적)
 # ==============================
-# 페이지 방문 시 'PageView' 이벤트 자동 전송
 pixel_code = f"""
 <script>
 !function(f,b,e,v,n,t,s)
@@ -46,7 +45,6 @@ fbq('track', 'PageView');
 src="https://www.facebook.com/tr?id={META_PIXEL_ID}&ev=PageView&noscript=1"
 /></noscript>
 """
-# 픽셀 코드를 헤더에 숨겨서 삽입
 st.markdown(pixel_code, unsafe_allow_html=True)
 
 
@@ -130,27 +128,36 @@ def send_data(payload: dict) -> dict:
 # 5. 메인 화면 구성
 # ==============================
 def main():
-    # 1. 로고 영역 수정 (여백은 줄이고, 로고는 키움)
+    # [핵심 수정] 로고 디자인 최적화 (슬림핏 배지 스타일)
     if LOGO_URL:
         st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: center; margin-bottom: 25px;">
             <div style="
                 background-color: rgba(255, 255, 255, 0.95);
-                padding: 8px 25px; 
-                border-radius: 30px; 
-                box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                padding: 12px 35px;  /* 위아래 여백 줄이고 좌우 여백 조정 */
+                border-radius: 50px; /* 완전 둥근 알약 모양 */
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 그림자로 입체감 추가 */
+                display: flex;
+                align-items: center;
+                justify-content: center;
             ">
-                <img src="{LOGO_URL}" alt="로고" style="height: 55px; width: auto; object-fit: contain; display: block;">
+                <img src="{LOGO_URL}" alt="로고" style="height: 45px; width: auto; object-fit: contain; display: block;">
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    # 2. 헤더 문구 수정 (HTML 깨짐 방지 및 가독성 개선)
+    # 헤더 문구
     st.markdown("""
     <div class="hero-box">
-        <h2 style="font-size: 1.6rem; margin: 0 0 5px 0; color: white;">정책자금 <span style="margin: 0 5px;">·</span> 정부지원금</h2>
-        <h3 style="color: #FFD700; font-size: 1.5rem; font-weight: 800; margin: 10px 0;">무료 상담신청</h3>
-        <p style="font-size: 1rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0;">
+        <h2 style="text-align: center; font-size: 1.6rem; margin: 0 0 5px 0; color: white; width: 100%;">
+            정책자금 <span style="margin: 0 5px;">·</span> 정부지원금
+        </h2>
+        
+        <h3 style="text-align: center; color: #FFD700; font-size: 1.5rem; font-weight: 800; margin: 10px 0; width: 100%;">
+            무료 상담신청
+        </h3>
+
+        <p style="text-align: center; font-size: 1rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0;">
             우리 기업에 딱 맞는 자금,<br>전문가가 1:1로 매칭해 드립니다.
         </p>
     </div>
@@ -198,10 +205,7 @@ def main():
                     "phone": formatted_phone,
                     "business_type": business_type,
                     "email": "광고_간편신청",
-                    "birth_year": "-", "gender": "-", "region": "-", 
-                    "industry": "-", "est_year": "-", "revenue": "-", 
-                    "funding_amount": "-", "tax_status": "-", "credit_status": "-",
-                    "employee_count": "-",
+                    "business_type_detail": "landing_page", 
                     "privacy_agree": True,
                     "marketing_agree": True,
                     "release_version": RELEASE_VERSION
@@ -210,7 +214,7 @@ def main():
                 with st.spinner("접수 중입니다..."):
                     send_data(payload)
                     
-                    # [핵심] 신청 완료 시 'Lead' 이벤트 전송 (성과 측정용)
+                    # [핵심] 신청 완료 시 'Lead' 이벤트 전송
                     st.markdown(f"""
                         <script>
                             fbq('track', 'Lead');
