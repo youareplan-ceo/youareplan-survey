@@ -8,12 +8,11 @@ import requests
 import streamlit as st
 
 # ==========================================
-# 1. 설정 및 유틸리티 (Config & Utils)
+# 1. 설정 및 유틸리티
 # ==========================================
 class _Config:
-    # 배포 환경에 맞게 URL 수정 필요 시 여기서 수정
-    SECOND_GAS_URL = os.getenv("SECOND_GAS_URL", "https://script.google.com/macros/s/AKfycbz_XXXXXXXX/exec") 
-    FIRST_GAS_TOKEN_API_URL = os.getenv("FIRST_GAS_TOKEN_API_URL", "https://script.google.com/macros/s/AKfycbw_YYYYYYYY/exec")
+    SECOND_GAS_URL = os.getenv("SECOND_GAS_URL", "")
+    FIRST_GAS_TOKEN_API_URL = os.getenv("FIRST_GAS_TOKEN_API_URL", "")
     API_TOKEN_STAGE2 = os.getenv("API_TOKEN_2", "youareplan_stage2")
 
 config = _Config()
@@ -68,105 +67,125 @@ def format_biz_no(d: str) -> str:
     return d
 
 # ==========================================
-# 2. 앱 설정 및 스타일 (UI/UX) - 강력한 CSS 수정
+# 2. 앱 설정 및 스타일
 # ==========================================
 st.set_page_config(page_title="유아플랜 심화 진단", page_icon="📝", layout="centered")
 
-RELEASE_VERSION = "v2-2025-optimized-fixed-ui"
+RELEASE_VERSION = "v2-2025-11-26-fixed"
 APPS_SCRIPT_URL = _normalize_gas_url(config.SECOND_GAS_URL)
 TOKEN_API_URL = _normalize_gas_url(config.FIRST_GAS_TOKEN_API_URL)
 API_TOKEN = config.API_TOKEN_STAGE2
 KAKAO_CHAT_URL = "https://pf.kakao.com/_LWxexmn/chat"
 
-# ★ CSS 수정: 다크모드/라이트모드 충돌 해결 및 가독성 확보
+# CSS - 라이트모드 강제 + 텍스트 가독성 확보
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
   
-  /* 1. 기본 테마 강제 (흰 배경 / 검은 글씨) */
-  :root {
-    --primary-color: #002855;
-    --background-color: #ffffff;
-    --text-color: #111111;
-  }
+  /* 라이트모드 강제 */
+  :root { color-scheme: light !important; }
   
-  html, body, .stApp {
-    font-family: 'Noto Sans KR', sans-serif;
+  html, body, .stApp, [data-testid="stAppViewContainer"] {
+    font-family: 'Noto Sans KR', sans-serif !important;
     background-color: #ffffff !important;
-    color: #111111 !important;
+    color: #0F172A !important;
   }
 
-  /* 2. 텍스트 라벨 강제 검정 (다크모드에서도 보이게) */
-  .stMarkdown p, .stText, h1, h2, h3, h4, h5, h6, 
-  label, .stSelectbox label, .stTextInput label, .stNumberInput label {
-    color: #111111 !important;
+  /* 모든 텍스트 색상 강제 */
+  h1, h2, h3, h4, h5, h6, p, span, div, label,
+  .stMarkdown, .stMarkdown p, .stMarkdown span,
+  .stText, [data-testid="stText"],
+  [data-testid="stHeading"], [data-testid="stMarkdownContainer"],
+  .stSelectbox label, .stTextInput label, .stNumberInput label,
+  .stRadio label, .stCheckbox label, .stMultiSelect label,
+  .stDateInput label, .stTextArea label {
+    color: #0F172A !important;
   }
   
-  /* 3. 입력 필드 (Input) 스타일링 - 흰 배경, 검은 글씨, 회색 테두리 */
-  .stTextInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
+  /* 라디오/체크박스 내부 span */
+  .stRadio label span, .stCheckbox label span,
+  [data-testid="stCheckbox"] label span,
+  [data-testid="stRadio"] label span {
+    color: #0F172A !important;
+  }
+
+  /* 입력 필드 */
+  .stTextInput input, .stDateInput input, .stTextArea textarea,
+  .stSelectbox div[data-baseweb="select"],
+  .stMultiSelect div[data-baseweb="select"] {
     background-color: #ffffff !important;
-    color: #111111 !important;
+    color: #0F172A !important;
     border: 1px solid #cbd5e1 !important;
     border-radius: 8px !important;
   }
   
-  /* Number Input 입력창 */
+  /* Number Input */
   .stNumberInput input {
     background-color: #ffffff !important;
-    color: #111111 !important;
+    color: #0F172A !important;
     border: 1px solid #cbd5e1 !important;
-    border-right: none !important; /* 버튼과 연결 */
-    border-radius: 8px 0 0 8px !important;
   }
 
-  /* Number Input의 +/- 버튼 스타일 (스크린샷의 검은 블럭 해결) */
-  button[kind="secondary"] {
+  /* Number Input +/- 버튼 */
+  .stNumberInput button,
+  button[kind="secondary"],
+  [data-testid="stNumberInput"] button {
     background-color: #f1f5f9 !important;
     border: 1px solid #cbd5e1 !important;
     color: #334155 !important;
   }
+  .stNumberInput button:hover,
   button[kind="secondary"]:hover {
     background-color: #e2e8f0 !important;
     color: #0f172a !important;
   }
+  
+  /* 선택된 태그 (MultiSelect) */
+  [data-baseweb="tag"] {
+    background-color: #0B5BD3 !important;
+    color: #ffffff !important;
+  }
+  [data-baseweb="tag"] span {
+    color: #ffffff !important;
+  }
 
-  /* 4. 상단 브랜드/헤더 영역 */
+  /* 브랜드/헤더 */
   .brandbar { 
-    padding:10px 14px; 
-    border-bottom:1px solid #e5e7eb; 
-    display:flex; 
-    align-items:center; 
+    padding: 10px 14px; 
+    border-bottom: 1px solid #e5e7eb; 
+    display: flex; 
+    align-items: center; 
     background-color: #ffffff;
   }
   .brandbar img { height: 40px; }
   
   .gov-topbar { 
-    background:#002855; 
-    color:#fff !important; /* 여기는 흰글씨 유지 */
-    font-size:13px; 
-    padding:8px 14px; 
+    background: #002855; 
+    color: #fff !important;
+    font-size: 13px; 
+    padding: 8px 14px; 
   }
   .gov-topbar * { color: #fff !important; }
 
   .gov-hero { 
     padding: 20px 0; 
-    border-bottom:1px solid #e5e7eb; 
-    margin-bottom:16px; 
+    border-bottom: 1px solid #e5e7eb; 
+    margin-bottom: 16px; 
     background-color: #ffffff;
   }
   .gov-hero h2 { 
-    color:#002855 !important; 
-    font-weight:700; 
-    margin:0; 
+    color: #002855 !important; 
+    font-weight: 700; 
+    margin: 0; 
     font-size: 22px; 
   }
   .gov-hero p { 
-    color:#4b5563 !important; 
-    margin-top:4px; 
+    color: #4b5563 !important; 
+    margin-top: 4px; 
     font-size: 14px; 
   }
 
-  /* 5. 제출 버튼 */
+  /* 제출 버튼 */
   div[data-testid="stFormSubmitButton"] button {
     background: #002855 !important; 
     border: none !important; 
@@ -180,7 +199,7 @@ st.markdown("""
   div[data-testid="stFormSubmitButton"] button:hover { opacity: 0.9; }
   div[data-testid="stFormSubmitButton"] button * { color: white !important; }
 
-  /* 6. 기타 컴포넌트 */
+  /* 컨테이너 */
   .block-container { 
     padding-top: 1rem !important; 
     padding-bottom: 4rem !important; 
@@ -196,34 +215,31 @@ st.markdown("""
     margin: 8px 0; 
   }
   
-  /* 라디오/체크박스 라벨 */
-  .stRadio label, .stCheckbox label {
-    color: #111111 !important;
+  /* 캡션/헬프 텍스트 */
+  .stCaption, div[data-testid="stCaptionContainer"], small {
+    color: #64748b !important;
   }
   
-  /* 헬프 텍스트 (작은 글씨) */
-  .stMarkdown small, div[data-testid="stCaptionContainer"] {
-    color: #64748b !important;
+  /* 사이드바/메뉴 숨김 */
+  #MainMenu, footer, [data-testid="stSidebar"], [data-testid="collapsedControl"] { 
+    display: none !important; 
   }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 로직 함수 (Logic)
+# 3. 로직 함수
 # ==========================================
 def validate_access_token(token, uuid_hint=None):
     try:
-        if "YOUR_GAS_ID" in TOKEN_API_URL:
-            # 개발용: 토큰 API가 설정 안 되었을 때 테스트용 패스
-            # return {"ok": True, "parent_receipt_no": "TEST-1234", "uuid": str(uuid4())}
-             return {"ok": False, "message": "API 설정이 필요합니다 (관리자 문의)."}
+        if not TOKEN_API_URL:
+            return {"ok": False, "message": "토큰 검증 API가 설정되지 않았습니다."}
             
         payload = {"action": "validate", "token": token, "api_token": "youareplan"}
         if uuid_hint: payload["uuid"] = uuid_hint
         
         ok, sc, data, err = post_json(TOKEN_API_URL, payload)
         
-        # 404 Fallback
         if sc == 404:
             r = requests.get(TOKEN_API_URL, params=payload, timeout=10)
             if r.status_code == 200: return r.json()
@@ -234,6 +250,9 @@ def validate_access_token(token, uuid_hint=None):
         return {"ok": False, "message": str(e)}
 
 def save_survey_data(data):
+    if not APPS_SCRIPT_URL:
+        return {"status": "error", "message": "저장 API가 설정되지 않았습니다."}
+    
     data['token'] = API_TOKEN
     data['release_version'] = RELEASE_VERSION
     
@@ -248,7 +267,7 @@ def save_survey_data(data):
     return {"status": "error", "message": err}
 
 # ==========================================
-# 4. 메인 화면 (Main)
+# 4. 메인 화면
 # ==========================================
 def main():
     logo_url = os.getenv("YOUAREPLAN_LOGO_URL") or "https://raw.githubusercontent.com/youareplan-ceo/youaplan-site/main/logo.png"
@@ -260,19 +279,11 @@ def main():
     magic_token = qp.get("t")
     uuid_hint = qp.get("u")
     
-    # 개발/테스트 편의를 위한 예외 처리 (배포 시 제거 가능)
-    # if not magic_token:
-    #     st.warning("⚠️ 테스트 모드로 진입합니다. (토큰 없음)")
-    #     magic_token = "TEST_TOKEN"
-    
     if not magic_token:
         st.error("잘못된 접근입니다. 담당자가 보내드린 링크를 다시 확인해주세요.")
         return
 
     v = validate_access_token(magic_token, uuid_hint)
-    
-    # 테스트용 우회 (실제 배포 시 주석 처리)
-    # if magic_token == "TEST_TOKEN": v = {"ok": True, "parent_receipt_no": "TEST-12345"}
 
     if not v.get("ok"):
         st.error(f"접속이 제한되었습니다: {v.get('message', '만료된 링크')}")
@@ -282,7 +293,7 @@ def main():
     st.info(f"✅ 접수번호: **{parent_rid}** (인증됨)")
 
     with st.form("survey_form"):
-        # ========== 1. 기본 정보 ==========
+        # 1. 기본 정보
         st.markdown("### 1. 기본 정보")
         name = st.text_input("성함", placeholder="홍길동").strip()
         
@@ -294,24 +305,23 @@ def main():
 
         company_name = st.text_input("상호명", placeholder="유아플랜")
         
-        # ========== 2. 사업장 정보 (신규) ==========
+        # 2. 사업장 정보
         st.markdown("---")
         st.markdown("### 2. 사업장 정보")
         
         store_type = st.selectbox("점포 형태", ["임차", "자가", "비점포 (온라인/무점포)"])
         
-        # 임차인 경우만 보증금/월세 입력
         deposit, monthly_rent = 0, 0
         if store_type == "임차":
             st.markdown('<div class="conditional-box">', unsafe_allow_html=True)
             col_dep, col_rent = st.columns(2)
             with col_dep:
-                deposit = st.number_input("보증금 (만원)", min_value=0, step=100, help="예: 3000만원 → 3000")
+                deposit = st.number_input("보증금 (만원)", min_value=0, step=100)
             with col_rent:
-                monthly_rent = st.number_input("월세 (만원)", min_value=0, step=10, help="예: 150만원 → 150")
+                monthly_rent = st.number_input("월세 (만원)", min_value=0, step=10)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # ========== 3. 재무 현황 ==========
+        # 3. 재무 현황
         st.markdown("---")
         st.markdown("### 3. 재무 현황")
         st.caption("📅 사업개시일 기준으로 매출 입력칸이 표시됩니다.")
@@ -342,22 +352,21 @@ def main():
         st.markdown("")
         col_fin1, col_fin2 = st.columns(2)
         with col_fin1:
-            capital = st.number_input("자본금 (만원)", min_value=0, step=100, help="법인: 등기부등본상 자본금")
+            capital = st.number_input("자본금 (만원)", min_value=0, step=100)
         with col_fin2:
-            debt = st.number_input("부채 총계 (만원)", min_value=0, step=100, help="금융권 대출 합계")
+            debt = st.number_input("부채 총계 (만원)", min_value=0, step=100)
 
-        # ========== 4. 보증 이용 경험 (신규) ==========
+        # 4. 보증 이용 경험
         st.markdown("---")
         st.markdown("### 4. 보증 이용 경험")
         
         guarantee_history = st.multiselect(
             "기존에 이용한 보증기관 (중복 선택 가능)",
             ["신용보증기금", "기술보증기금", "지역신용보증재단", "소상공인시장진흥공단", "이용 경험 없음"],
-            default=["이용 경험 없음"],
-            help="현재 이용 중이거나 과거에 이용한 기관 모두 선택"
+            default=["이용 경험 없음"]
         )
 
-        # ========== 5. 기술 및 우대 사항 ==========
+        # 5. 기술 및 우대 사항
         st.markdown("---")
         st.markdown("### 5. 기술 및 우대 사항")
         
@@ -372,14 +381,14 @@ def main():
             ["운전자금 (인건비/재료비)", "시설자금 (기계/건축)", "대환자금"], 
             default=["운전자금 (인건비/재료비)"])
         
-        # ========== 6. 자가 진단 ==========
+        # 6. 자가 진단
         st.markdown("---")
         st.markdown("### 6. 자가 진단")
         
         has_tax_issue = st.checkbox("현재 국세/지방세 체납 중입니까?", value=False)
         has_overdue = st.checkbox("최근 3개월 내 대출금 연체 사실이 있습니까?", value=False)
         
-        # ========== 7. 동의 ==========
+        # 7. 동의
         st.markdown("---")
         agree_privacy = st.checkbox("개인정보 수집 및 이용에 동의합니다. (필수)")
         with st.expander("동의 내용 보기"):
@@ -435,7 +444,7 @@ def main():
                     st.markdown(f"<br><a href='{KAKAO_CHAT_URL}' target='_blank' style='display:block;text-align:center;background:#FEE500;padding:15px;border-radius:10px;text-decoration:none;color:#3c1e1e;font-weight:bold;'>💬 담당자에게 카톡 보내기</a>", unsafe_allow_html=True)
                     st.stop()
                 else:
-                    st.error("제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                    st.error(f"제출 중 오류가 발생했습니다: {res.get('message', '알 수 없는 오류')}")
 
 if __name__ == "__main__":
     main()
