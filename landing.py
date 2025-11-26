@@ -1,7 +1,3 @@
-"""
-유아플랜 광고형 랜딩 페이지 (풀스크린 히어로 버전) - 수정본
-"""
-
 import streamlit as st
 import requests
 import re
@@ -9,6 +5,7 @@ import os
 from datetime import datetime
 from uuid import uuid4
 import random
+import time
 
 st.set_page_config(
     page_title="정책자금 무료 상담 | 유아플랜",
@@ -18,9 +15,38 @@ st.set_page_config(
 )
 
 # ==============================
+# [핵심] 메타 픽셀 설정 (CCTV 설치)
+# ==============================
+META_PIXEL_ID = "1372327777599495"
+
+# 픽셀 기본 코드 (페이지 방문 추적 - PageView)
+# 이 코드가 있어야 메타가 '아, 내 광고 보고 들어왔구나'를 압니다.
+pixel_base_code = f"""
+<script>
+!function(f,b,e,v,n,t,s)
+{{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '{META_PIXEL_ID}');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id={META_PIXEL_ID}&ev=PageView&noscript=1"
+/></noscript>
+"""
+# 픽셀 코드를 헤더에 강제 삽입
+st.markdown(pixel_base_code, unsafe_allow_html=True)
+
+
+# ==============================
 # 환경 설정
 # ==============================
 BRAND_NAME = "유아플랜"
+# 로고 이미지는 흰색 로고 사용 (배경이 진한 색이라 흰색이 잘 보임)
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
@@ -30,8 +56,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 KAKAO_CHANNEL_URL = "https://pf.kakao.com/_LWxexmn"
-
-RELEASE_VERSION = "v2025-11-26-hero-fix"
+RELEASE_VERSION = "v2025-11-26-pixel-installed"
 
 # ==============================
 # 유틸리티 함수
@@ -415,6 +440,13 @@ def main():
                     
                     result = save_to_sheet(data)
                     send_telegram({**data, 'timestamp': timestamp})
+                    
+                    # [핵심] 신청 성공 시 메타에 'Lead' 신호 전송!
+                    st.markdown(f"""
+                        <script>
+                            fbq('track', 'Lead');
+                        </script>
+                    """, unsafe_allow_html=True)
                     
                     st.session_state.submitted = True
                     st.session_state.receipt_no = receipt_no
