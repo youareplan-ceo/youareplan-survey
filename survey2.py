@@ -46,11 +46,13 @@ def post_json(url, payload, headers=None, timeout=10, retries=1):
                 return True, r.status_code, (data if isinstance(data, dict) else {}), None
             
             if r.status_code in (408, 429) and i < retries:
-                time.sleep(0.6 * (i + 1)); continue
+                time.sleep(0.6 * (i + 1))
+                continue
             return False, r.status_code, data, f"HTTP {r.status_code}"
         except Exception as e:
             if i < retries:
-                time.sleep(0.6 * (i + 1)); continue
+                time.sleep(0.6 * (i + 1))
+                continue
             return False, None, {}, str(e)
 
 def _digits_only(s: str) -> str:
@@ -71,13 +73,13 @@ def format_biz_no(d: str) -> str:
 # ==========================================
 st.set_page_config(page_title="유아플랜 심화 진단", page_icon="📝", layout="centered")
 
-RELEASE_VERSION = "v2-2025-11-26-fixed"
+RELEASE_VERSION = "v2-2025-11-26-fixed-v2"
 APPS_SCRIPT_URL = _normalize_gas_url(config.SECOND_GAS_URL)
 TOKEN_API_URL = _normalize_gas_url(config.FIRST_GAS_TOKEN_API_URL)
 API_TOKEN = config.API_TOKEN_STAGE2
 KAKAO_CHAT_URL = "https://pf.kakao.com/_LWxexmn/chat"
 
-# CSS - 라이트모드 강제 + 텍스트 가독성 확보
+# CSS - 라이트모드 강제 + SelectBox/MultiSelect 완전 수정
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -91,10 +93,94 @@ st.markdown("""
     color: #0F172A !important;
   }
 
-  /* 모든 텍스트 색상 강제 */
+  /* ========== SelectBox/MultiSelect 완전 수정 ========== */
+  /* 컨테이너 전체 (4단계 깊이까지) */
+  [data-baseweb="select"],
+  [data-baseweb="select"] > div,
+  [data-baseweb="select"] > div > div,
+  [data-baseweb="select"] > div > div > div,
+  [data-baseweb="select"] > div > div > div > div,
+  .stSelectbox [data-baseweb="select"],
+  .stSelectbox [data-baseweb="select"] > div,
+  .stSelectbox [data-baseweb="select"] > div > div,
+  .stMultiSelect [data-baseweb="select"],
+  .stMultiSelect [data-baseweb="select"] > div,
+  .stMultiSelect [data-baseweb="select"] > div > div {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+  }
+  
+  /* 선택된 값 텍스트 */
+  [data-baseweb="select"] span,
+  [data-baseweb="select"] input,
+  [data-baseweb="select"] [data-testid="stMarkdownContainer"],
+  .stSelectbox span,
+  .stSelectbox div,
+  .stMultiSelect span {
+    color: #0F172A !important;
+    background: transparent !important;
+  }
+  
+  /* Placeholder 텍스트 */
+  [data-baseweb="select"] [aria-live="polite"],
+  [data-baseweb="select"] .css-1dimb5e-singleValue,
+  [data-baseweb="select"] .css-qc6sy-singleValue {
+    color: #6b7280 !important;
+  }
+
+  /* 드롭다운 팝오버 (옵션 목록) */
+  div[data-baseweb="popover"],
+  div[data-baseweb="popover"] > div,
+  div[data-baseweb="popover"] > div > div,
+  div[data-baseweb="menu"],
+  div[data-baseweb="menu"] > div,
+  div[role="listbox"],
+  div[role="listbox"] > div,
+  ul[role="listbox"],
+  ul[role="listbox"] > li {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0F172A !important;
+  }
+  
+  /* 드롭다운 옵션 항목 */
+  li[role="option"],
+  div[role="option"],
+  [data-baseweb="menu"] li,
+  [data-baseweb="menu"] div {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0F172A !important;
+  }
+  li[role="option"]:hover,
+  div[role="option"]:hover,
+  [data-baseweb="menu"] li:hover {
+    background: #f1f5f9 !important;
+    background-color: #f1f5f9 !important;
+  }
+  
+  /* 선택된 태그 (파란색 유지) */
+  [data-baseweb="tag"] {
+    background-color: #0B5BD3 !important;
+  }
+  [data-baseweb="tag"] span,
+  [data-baseweb="tag"] svg {
+    color: #ffffff !important;
+    fill: #ffffff !important;
+  }
+  
+  /* Clear/X 버튼 */
+  [data-baseweb="select"] svg,
+  .stSelectbox svg,
+  .stMultiSelect svg {
+    fill: #64748b !important;
+  }
+  /* ========== SelectBox/MultiSelect 끝 ========== */
+
+  /* 모든 텍스트/라벨 색상 */
   h1, h2, h3, h4, h5, h6, p, span, div, label,
-  .stMarkdown, .stMarkdown p, .stMarkdown span,
-  .stText, [data-testid="stText"],
+  .stMarkdown, .stMarkdown p, .stText,
   [data-testid="stHeading"], [data-testid="stMarkdownContainer"],
   .stSelectbox label, .stTextInput label, .stNumberInput label,
   .stRadio label, .stCheckbox label, .stMultiSelect label,
@@ -102,17 +188,14 @@ st.markdown("""
     color: #0F172A !important;
   }
   
-  /* 라디오/체크박스 내부 span */
   .stRadio label span, .stCheckbox label span,
-  [data-testid="stCheckbox"] label span,
-  [data-testid="stRadio"] label span {
+  [data-testid="stCheckbox"] span,
+  [data-testid="stRadio"] span {
     color: #0F172A !important;
   }
 
-  /* 입력 필드 */
-  .stTextInput input, .stDateInput input, .stTextArea textarea,
-  .stSelectbox div[data-baseweb="select"],
-  .stMultiSelect div[data-baseweb="select"] {
+  /* 일반 입력 필드 */
+  .stTextInput input, .stDateInput input, .stTextArea textarea {
     background-color: #ffffff !important;
     color: #0F172A !important;
     border: 1px solid #cbd5e1 !important;
@@ -125,64 +208,50 @@ st.markdown("""
     color: #0F172A !important;
     border: 1px solid #cbd5e1 !important;
   }
-
-  /* Number Input +/- 버튼 */
   .stNumberInput button,
-  button[kind="secondary"],
   [data-testid="stNumberInput"] button {
     background-color: #f1f5f9 !important;
     border: 1px solid #cbd5e1 !important;
     color: #334155 !important;
   }
-  .stNumberInput button:hover,
-  button[kind="secondary"]:hover {
+  .stNumberInput button:hover {
     background-color: #e2e8f0 !important;
-    color: #0f172a !important;
-  }
-  
-  /* 선택된 태그 (MultiSelect) */
-  [data-baseweb="tag"] {
-    background-color: #0B5BD3 !important;
-    color: #ffffff !important;
-  }
-  [data-baseweb="tag"] span {
-    color: #ffffff !important;
   }
 
-  /* 브랜드/헤더 */
+  /* 헤더 */
   .brandbar { 
     padding: 10px 14px; 
     border-bottom: 1px solid #e5e7eb; 
-    display: flex; 
-    align-items: center; 
-    background-color: #ffffff;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
   }
   .brandbar img { height: 40px; }
   
   .gov-topbar { 
     background: #002855; 
-    color: #fff !important;
+    color: #fff !important; 
     font-size: 13px; 
     padding: 8px 14px; 
   }
   .gov-topbar * { color: #fff !important; }
-
+  
   .gov-hero { 
     padding: 20px 0; 
     border-bottom: 1px solid #e5e7eb; 
     margin-bottom: 16px; 
-    background-color: #ffffff;
+    background: #ffffff; 
   }
   .gov-hero h2 { 
     color: #002855 !important; 
     font-weight: 700; 
     margin: 0; 
-    font-size: 22px; 
+    font-size: 22px;
   }
   .gov-hero p { 
     color: #4b5563 !important; 
     margin-top: 4px; 
-    font-size: 14px; 
+    font-size: 14px;
   }
 
   /* 제출 버튼 */
@@ -193,34 +262,48 @@ st.markdown("""
     font-weight: 700 !important; 
     padding: 12px !important; 
     border-radius: 8px !important;
-    width: 100%; 
+    width: 100%;
     margin-top: 10px;
   }
-  div[data-testid="stFormSubmitButton"] button:hover { opacity: 0.9; }
-  div[data-testid="stFormSubmitButton"] button * { color: white !important; }
+  div[data-testid="stFormSubmitButton"] button:hover {
+    opacity: 0.9;
+  }
+  div[data-testid="stFormSubmitButton"] button * { 
+    color: white !important; 
+  }
 
   /* 컨테이너 */
   .block-container { 
     padding-top: 1rem !important; 
-    padding-bottom: 4rem !important; 
+    padding-bottom: 4rem !important;
     max-width: 800px; 
   }
   
   /* 조건부 박스 */
-  .conditional-box { 
-    background: #f8fafc; 
-    border: 1px solid #e2e8f0; 
-    border-radius: 8px; 
-    padding: 12px; 
-    margin: 8px 0; 
+  .conditional-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
   }
   
-  /* 캡션/헬프 텍스트 */
+  /* 캡션 */
   .stCaption, div[data-testid="stCaptionContainer"], small {
     color: #64748b !important;
   }
   
-  /* 사이드바/메뉴 숨김 */
+  /* Expander */
+  .streamlit-expanderHeader {
+    color: #0F172A !important;
+    background: #f8fafc !important;
+  }
+  .streamlit-expanderContent {
+    background: #ffffff !important;
+    color: #0F172A !important;
+  }
+  
+  /* 숨김 */
   #MainMenu, footer, [data-testid="stSidebar"], [data-testid="collapsedControl"] { 
     display: none !important; 
   }
@@ -441,7 +524,15 @@ def main():
                 if res.get("status") in ["success", "success_delayed"]:
                     st.success("✅ 제출이 완료되었습니다!")
                     st.info("담당자가 내용을 검토 후 1영업일 내로 연락드립니다.")
-                    st.markdown(f"<br><a href='{KAKAO_CHAT_URL}' target='_blank' style='display:block;text-align:center;background:#FEE500;padding:15px;border-radius:10px;text-decoration:none;color:#3c1e1e;font-weight:bold;'>💬 담당자에게 카톡 보내기</a>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <br>
+                    <a href='{KAKAO_CHAT_URL}' target='_blank' 
+                       style='display:block;text-align:center;background:#FEE500;
+                              padding:15px;border-radius:10px;text-decoration:none;
+                              color:#3c1e1e;font-weight:bold;'>
+                        💬 담당자에게 카톡 보내기
+                    </a>
+                    """, unsafe_allow_html=True)
                     st.stop()
                 else:
                     st.error(f"제출 중 오류가 발생했습니다: {res.get('message', '알 수 없는 오류')}")
