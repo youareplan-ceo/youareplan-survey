@@ -113,10 +113,22 @@ def send_data(payload: dict) -> dict:
 def main():
     if LOGO_URL:
         st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
-            <img src="{LOGO_URL}" style="width: 160px; max-width: 80%; object-fit: contain;">
+        <div style="
+            display: flex; 
+            justify-content: center; 
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.95); 
+            padding: 15px; 
+            border-radius: 15px; 
+            width: fit-content; 
+            margin-left: auto; 
+            margin-right: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+            <img src="{LOGO_URL}" alt="로고" style="width: 160px; height: auto; object-fit: contain;">
         </div>
         """, unsafe_allow_html=True)
+        
     # 상단 디자인
     st.markdown("""
     <div class="hero-box">
