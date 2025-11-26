@@ -5,6 +5,7 @@ from uuid import uuid4
 from datetime import datetime
 import random
 import os
+import time  # time 모듈을 상단으로 이동
 
 # ==============================
 # 1. 기본 설정
@@ -17,15 +18,14 @@ DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youaplan-si
 LOGO_URL = os.getenv("YOUAREPLAN_LOGO_URL") or DEFAULT_LOGO_URL
 
 # -------------------------------------------------------------------------
-# [핵심] 대표님이 보내주신 구글 웹앱 URL을 여기에 적용했습니다.
-# 이 주소로 데이터가 전송되어 시트(ID: 1ZoN2l...)에 저장됩니다.
+# [핵심] 구글 웹앱 URL (데이터 전송용)
 # -------------------------------------------------------------------------
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzleqjuxb8XFkXJa8U0qdEOTx_GM80CcPQXfqdYmhVnzYOZjI6ATQCp8GberO3zqmrNMw/exec"
 
-# 보안 토큰 (기존과 동일하게 유지)
+# 보안 토큰
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 
-RELEASE_VERSION = "v2025-11-26-landing-final"
+RELEASE_VERSION = "v2025-11-26-landing-fixed-logo"
 
 # ==============================
 # 2. 스타일링 (신뢰감을 주는 디자인)
@@ -48,9 +48,7 @@ st.markdown("""
     margin-bottom: 30px;
     box-shadow: 0 4px 15px rgba(0, 91, 172, 0.2);
   }
-  .hero-box h2 { color: white; font-weight: 800; margin: 0 0 10px 0; font-size: 1.6rem; }
-  .hero-box p { color: #e0e0e0; margin: 0; font-size: 1rem; }
-
+  
   /* 입력 필드 스타일 */
   .stTextInput input, .stSelectbox div[data-baseweb="select"], .stRadio {
     border-radius: 10px !important;
@@ -97,39 +95,38 @@ def format_phone(d: str) -> str:
 
 def send_data(payload: dict) -> dict:
     headers = {"Content-Type": "application/json"}
-    # 토큰이 없으면 기본값 주입
     if not payload.get('token'):
         payload['token'] = API_TOKEN
     try:
-        # 설정한 URL로 데이터 전송
         requests.post(APPS_SCRIPT_URL, json=payload, headers=headers, timeout=10)
         return {"status": "success"}
     except:
-        return {"status": "success"} # 고객 화면에서는 에러를 숨김 (이탈 방지)
+        return {"status": "success"}
 
 # ==============================
 # 4. 메인 화면 (초간단 신청서)
 # ==============================
 def main():
-    # 1. 로고 영역 (슬림한 알약 모양으로 수정)
+    # 1. 로고 영역 (크기 확대 수정됨)
     if LOGO_URL:
         st.markdown(f"""
-        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: center; margin-bottom: 25px;">
             <div style="
                 background-color: rgba(255, 255, 255, 0.95);
-                padding: 10px 30px; 
-                border-radius: 30px; 
-                box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                padding: 15px 40px; 
+                border-radius: 50px; 
+                box-shadow: 0 4px 10px rgba(0,0,0,0.15);
             ">
-                <img src="{LOGO_URL}" alt="로고" style="height: 40px; width: auto; object-fit: contain; display: block;">
+                <img src="{LOGO_URL}" alt="로고" style="height: 80px; width: auto; object-fit: contain; display: block;">
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    # 상단 디자인 (직관적인 문구로 수정됨)
+    # 상단 디자인 (HTML 구조 정돈)
+    # 주의: f-string이나 변수 삽입 없이 순수 HTML 문자열로 작성하여 깨짐 방지
     st.markdown("""
     <div class="hero-box">
-        <h2 style="font-size: 1.6rem; margin-bottom: 5px;">
+        <h2 style="font-size: 1.6rem; margin: 0 0 10px 0; color: white; font-weight: 800;">
             정책자금 <span style="margin: 0 5px;">·</span> 정부지원금
         </h2>
         
@@ -137,7 +134,7 @@ def main():
             무료 상담신청
         </h3>
 
-        <p style="font-size: 0.95rem; margin-top: 15px; opacity: 0.9; font-weight: 400;">
+        <p style="font-size: 0.95rem; margin-top: 15px; opacity: 0.9; font-weight: 400; color: #e0e0e0; line-height: 1.6;">
             우리 기업에 딱 맞는 자금,<br>
             전문가가 1:1로 매칭해 드립니다.
         </p>
@@ -184,23 +181,17 @@ def main():
                 formatted_phone = format_phone(clean_phone)
                 receipt_no = f"YP{datetime.now().strftime('%m%d')}-{random.randint(1000, 9999)}"
 
-                # [핵심] 3가지 정보 외에는 빈 값('-')을 채워서 전송 (시트 오류 방지)
                 payload = {
                     "token": "youareplan",
                     "receipt_no": receipt_no,
                     "name": name,
                     "phone": formatted_phone,
                     "business_type": business_type,
-                    
-                    # 상담 경로 표시 (시트에서 구분하기 위함)
                     "email": "광고_간편신청",
-                    
-                    # 나머지 필드 빈 값 처리
                     "birth_year": "-", "gender": "-", "region": "-", 
                     "industry": "-", "est_year": "-", "revenue": "-", 
                     "funding_amount": "-", "tax_status": "-", "credit_status": "-",
                     "employee_count": "-",
-                    
                     "privacy_agree": True,
                     "marketing_agree": True,
                     "release_version": RELEASE_VERSION
@@ -214,7 +205,7 @@ def main():
                 st.markdown(f"""
                     <div style="text-align: center; margin-top: 20px; padding: 20px; background-color: #f0f2f6; border-radius: 10px;">
                         <h3 style="color: #002855; margin:0;">담당자 배정 중...</h3>
-                        <p style="color: #555; margin-top:10px;">
+                        <p style="color: #555; margin-top:10px; line-height: 1.5;">
                             입력하신 <strong>{formatted_phone}</strong> 번호로<br>
                             담당자가 빠르게 연락드리겠습니다.
                         </p>
@@ -230,5 +221,4 @@ def main():
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    import time
     main()
