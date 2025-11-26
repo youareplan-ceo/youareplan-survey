@@ -1,7 +1,5 @@
 """
-유아플랜 광고형 랜딩 페이지 (풀스크린 히어로 버전)
-- 로고 크게 + 통합 히어로 섹션
-- 스크롤 시 간편 폼
+유아플랜 광고형 랜딩 페이지 (풀스크린 히어로 버전) - 수정본
 """
 
 import streamlit as st
@@ -33,7 +31,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 KAKAO_CHANNEL_URL = "https://pf.kakao.com/_LWxexmn"
 
-RELEASE_VERSION = "v2025-11-26-hero"
+RELEASE_VERSION = "v2025-11-26-hero-fix"
 
 # ==============================
 # 유틸리티 함수
@@ -50,7 +48,7 @@ def send_telegram(data: dict) -> bool:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return False
     try:
-        msg = f"""🚀 <b>광고 랜딩 신규 상담</b>
+        msg = f"""🚀 광고 랜딩 신규 상담
 
 👤 {data.get('name', '')}
 📞 {data.get('phone', '')}
@@ -78,409 +76,278 @@ def save_to_sheet(data: dict) -> dict:
         return {"status": "error", "message": str(e)}
 
 # ==============================
-# CSS 스타일 (풀스크린 히어로)
+# 메인 함수
 # ==============================
-st.markdown("""
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
-  
-  /* 기본 설정 */
-  :root {
-    --navy: #002855;
-    --navy-light: #003d7a;
-    --gold: #FFD700;
-    --white: #ffffff;
-    color-scheme: light !important;
-  }
-  
-  html, body, [class*="css"] {
-    font-family: 'Noto Sans KR', -apple-system, sans-serif;
-  }
-  
-  /* Streamlit 기본 요소 숨김 */
-  #MainMenu, footer, header, [data-testid="stToolbar"], 
-  [data-testid="stSidebar"], [data-testid="collapsedControl"] {
-    display: none !important;
-  }
-  
-  .stApp {
-    background: var(--white) !important;
-  }
-  
-  .block-container {
-    padding: 0 !important;
-    max-width: 100% !important;
-  }
-  
-  /* ========== 히어로 섹션 ========== */
-  .hero-section {
-    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 50%, #0066cc 100%);
-    min-height: 70vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 24px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  /* 배경 장식 */
-  .hero-section::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle at 30% 70%, rgba(255,255,255,0.05) 0%, transparent 50%);
-    animation: float 20s ease-in-out infinite;
-  }
-  
-  @keyframes float {
-    0%, 100% { transform: translate(0, 0) rotate(0deg); }
-    50% { transform: translate(30px, -30px) rotate(180deg); }
-  }
-  
-  /* 로고 */
-  .hero-logo {
-    position: relative;
-    z-index: 2;
-    margin-bottom: 40px;
-  }
-  
-  .hero-logo img {
-    height: 80px;
-    width: auto;
-    filter: drop-shadow(0 4px 20px rgba(0,0,0,0.3));
-    transition: transform 0.3s ease;
-  }
-  
-  .hero-logo img:hover {
-    transform: scale(1.05);
-  }
-  
-  /* 메인 타이틀 */
-  .hero-title {
-    position: relative;
-    z-index: 2;
-    color: var(--white);
-    font-size: 36px;
-    font-weight: 900;
-    margin: 0 0 16px 0;
-    letter-spacing: -1px;
-    text-shadow: 0 2px 20px rgba(0,0,0,0.3);
-  }
-  
-  /* 서브 타이틀 (강조) */
-  .hero-subtitle {
-    position: relative;
-    z-index: 2;
-    color: var(--gold);
-    font-size: 28px;
-    font-weight: 700;
-    margin: 0 0 24px 0;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  }
-  
-  /* 설명 텍스트 */
-  .hero-desc {
-    position: relative;
-    z-index: 2;
-    color: rgba(255,255,255,0.9);
-    font-size: 18px;
-    font-weight: 400;
-    line-height: 1.7;
-    margin: 0 0 40px 0;
-    max-width: 400px;
-  }
-  
-  /* CTA 버튼 */
-  .hero-cta {
-    position: relative;
-    z-index: 2;
-    display: inline-block;
-    background: var(--gold);
-    color: var(--navy) !important;
-    font-size: 20px;
-    font-weight: 700;
-    padding: 18px 48px;
-    border-radius: 50px;
-    text-decoration: none;
-    box-shadow: 0 8px 30px rgba(255,215,0,0.4);
-    transition: all 0.3s ease;
-    animation: pulse-btn 2s ease-in-out infinite;
-  }
-  
-  .hero-cta:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 40px rgba(255,215,0,0.5);
-  }
-  
-  @keyframes pulse-btn {
-    0%, 100% { box-shadow: 0 8px 30px rgba(255,215,0,0.4); }
-    50% { box-shadow: 0 8px 40px rgba(255,215,0,0.6); }
-  }
-  
-  /* 스크롤 인디케이터 */
-  .scroll-indicator {
-    position: relative;
-    z-index: 2;
-    margin-top: 40px;
-    color: rgba(255,255,255,0.6);
-    font-size: 14px;
-    animation: bounce 2s ease-in-out infinite;
-  }
-  
-  @keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(10px); }
-  }
-  
-  /* ========== 폼 섹션 ========== */
-  .form-section {
-    background: var(--white);
-    padding: 60px 24px;
-    max-width: 600px;
-    margin: 0 auto;
-  }
-  
-  .form-header {
-    text-align: center;
-    margin-bottom: 40px;
-  }
-  
-  .form-header h2 {
-    color: var(--navy);
-    font-size: 28px;
-    font-weight: 700;
-    margin: 0 0 12px 0;
-  }
-  
-  .form-header p {
-    color: #666;
-    font-size: 16px;
-    margin: 0;
-  }
-  
-  /* 입력 필드 스타일 */
-  .stTextInput > div > div > input,
-  .stSelectbox > div > div {
-    border: 2px solid #e0e0e0 !important;
-    border-radius: 12px !important;
-    padding: 16px !important;
-    font-size: 16px !important;
-    transition: all 0.3s ease !important;
-    background: #fafafa !important;
-  }
-  
-  .stTextInput > div > div > input:focus,
-  .stSelectbox > div > div:focus-within {
-    border-color: var(--navy) !important;
-    background: var(--white) !important;
-    box-shadow: 0 0 0 3px rgba(0,40,85,0.1) !important;
-  }
-  
-  /* 레이블 */
-  .stTextInput label, .stSelectbox label, .stCheckbox label {
-    color: #333 !important;
-    font-weight: 600 !important;
-    font-size: 15px !important;
-    margin-bottom: 8px !important;
-  }
-  
-  /* 제출 버튼 */
-  div[data-testid="stFormSubmitButton"] button {
-    width: 100% !important;
-    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%) !important;
-    color: var(--white) !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-    padding: 18px 32px !important;
-    border: none !important;
-    border-radius: 12px !important;
-    cursor: pointer !important;
-    transition: all 0.3s ease !important;
-    box-shadow: 0 4px 15px rgba(0,40,85,0.3) !important;
-  }
-  
-  div[data-testid="stFormSubmitButton"] button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(0,40,85,0.4) !important;
-  }
-  
-  /* 체크박스 */
-  .stCheckbox {
-    background: #f8f9fa !important;
-    padding: 12px 16px !important;
-    border-radius: 8px !important;
-    border: 1px solid #e9ecef !important;
-  }
-  
-  /* 신뢰 배지 섹션 */
-  .trust-section {
-    background: #f8f9fa;
-    padding: 40px 24px;
-    text-align: center;
-  }
-  
-  .trust-badges {
-    display: flex;
-    justify-content: center;
-    gap: 32px;
-    flex-wrap: wrap;
-    max-width: 600px;
-    margin: 0 auto;
-  }
-  
-  .trust-badge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .trust-badge .icon {
-    font-size: 32px;
-  }
-  
-  .trust-badge .text {
-    color: #555;
-    font-size: 14px;
-    font-weight: 500;
-  }
-  
-  /* 푸터 */
-  .footer {
-    background: var(--navy);
-    color: rgba(255,255,255,0.7);
-    padding: 32px 24px;
-    text-align: center;
-    font-size: 13px;
-    line-height: 1.8;
-  }
-  
-  .footer a {
-    color: rgba(255,255,255,0.9);
-    text-decoration: none;
-  }
-  
-  /* ========== 반응형 ========== */
-  @media (max-width: 640px) {
-    .hero-section {
-      min-height: 65vh;
-      padding: 50px 20px;
+def main():
+    # CSS 스타일
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+    
+    :root {
+        --navy: #002855;
+        --navy-light: #003d7a;
+        --gold: #FFD700;
+        color-scheme: light !important;
     }
     
-    .hero-logo img {
-      height: 64px;
+    html, body, [class*="css"] {
+        font-family: 'Noto Sans KR', -apple-system, sans-serif !important;
+    }
+    
+    #MainMenu, footer, header, [data-testid="stToolbar"], 
+    [data-testid="stSidebar"], [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    
+    .stApp {
+        background: #ffffff !important;
+    }
+    
+    .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    
+    .hero-box {
+        background: linear-gradient(135deg, #002855 0%, #003d7a 50%, #0066cc 100%);
+        padding: 60px 24px;
+        text-align: center;
+        margin: -1rem -1rem 0 -1rem;
+    }
+    
+    .hero-logo-img {
+        height: 72px;
+        margin-bottom: 32px;
+        filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
     }
     
     .hero-title {
-      font-size: 28px;
+        color: #ffffff !important;
+        font-size: 32px !important;
+        font-weight: 900 !important;
+        margin: 0 0 12px 0 !important;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.3);
     }
     
     .hero-subtitle {
-      font-size: 22px;
+        color: #FFD700 !important;
+        font-size: 26px !important;
+        font-weight: 700 !important;
+        margin: 0 0 20px 0 !important;
     }
     
     .hero-desc {
-      font-size: 16px;
+        color: rgba(255,255,255,0.9) !important;
+        font-size: 17px !important;
+        line-height: 1.7 !important;
+        margin: 0 0 32px 0 !important;
     }
     
-    .hero-cta {
-      font-size: 18px;
-      padding: 16px 40px;
+    .hero-cta-btn {
+        display: inline-block;
+        background: #FFD700;
+        color: #002855 !important;
+        font-size: 18px;
+        font-weight: 700;
+        padding: 16px 40px;
+        border-radius: 50px;
+        text-decoration: none;
+        box-shadow: 0 6px 20px rgba(255,215,0,0.4);
+        transition: all 0.3s ease;
     }
     
-    .form-section {
-      padding: 40px 20px;
+    .hero-cta-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255,215,0,0.5);
+        color: #002855 !important;
+        text-decoration: none;
     }
     
-    .form-header h2 {
-      font-size: 24px;
+    .scroll-hint {
+        color: rgba(255,255,255,0.6);
+        font-size: 14px;
+        margin-top: 28px;
     }
     
-    .trust-badges {
-      gap: 24px;
+    .trust-box {
+        background: #f8f9fa;
+        padding: 32px 24px;
+        text-align: center;
+        margin: 0 -1rem;
     }
-  }
-</style>
-""", unsafe_allow_html=True)
-
-# ==============================
-# 메인 렌더링
-# ==============================
-def main():
-    # ===== 히어로 섹션 =====
-    st.markdown(f"""
-    <div class="hero-section">
-        <div class="hero-logo">
-            <img src="{LOGO_URL}" alt="{BRAND_NAME}">
-        </div>
-        
-        <h1 class="hero-title">정책자금 · 정부지원금</h1>
-        <h2 class="hero-subtitle">무료 상담신청</h2>
-        
-        <p class="hero-desc">
-            우리 기업에 딱 맞는 자금,<br>
-            전문가가 1:1로 매칭해 드립니다.
-        </p>
-        
-        <a href="#form-section" class="hero-cta">
-            지금 무료 상담받기 →
-        </a>
-        
-        <div class="scroll-indicator">
-            ↓ 아래에서 간단히 신청하세요
-        </div>
-    </div>
+    
+    .trust-grid {
+        display: flex;
+        justify-content: center;
+        gap: 28px;
+        flex-wrap: wrap;
+    }
+    
+    .trust-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .trust-icon {
+        font-size: 28px;
+    }
+    
+    .trust-text {
+        color: #555;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    
+    .form-header-box {
+        text-align: center;
+        padding: 32px 16px 16px 16px;
+    }
+    
+    .form-header-title {
+        color: #002855 !important;
+        font-size: 24px !important;
+        font-weight: 700 !important;
+        margin: 0 0 8px 0 !important;
+    }
+    
+    .form-header-desc {
+        color: #666 !important;
+        font-size: 15px !important;
+        margin: 0 !important;
+    }
+    
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div {
+        border: 2px solid #e0e0e0 !important;
+        border-radius: 10px !important;
+        padding: 14px !important;
+        font-size: 16px !important;
+        background: #fafafa !important;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div:focus-within {
+        border-color: #002855 !important;
+        background: #ffffff !important;
+        box-shadow: 0 0 0 3px rgba(0,40,85,0.1) !important;
+    }
+    
+    .stTextInput label, .stSelectbox label, .stCheckbox label {
+        color: #333 !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
+    }
+    
+    div[data-testid="stFormSubmitButton"] button {
+        width: 100% !important;
+        background: linear-gradient(135deg, #002855 0%, #003d7a 100%) !important;
+        color: #ffffff !important;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        padding: 16px 32px !important;
+        border: none !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 12px rgba(0,40,85,0.3) !important;
+    }
+    
+    div[data-testid="stFormSubmitButton"] button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 16px rgba(0,40,85,0.4) !important;
+    }
+    
+    .stCheckbox {
+        background: #f8f9fa !important;
+        padding: 10px 14px !important;
+        border-radius: 8px !important;
+        border: 1px solid #e9ecef !important;
+    }
+    
+    .footer-box {
+        background: #002855;
+        color: rgba(255,255,255,0.7);
+        padding: 28px 24px;
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.8;
+        margin: 40px -1rem 0 -1rem;
+    }
+    
+    .footer-box a {
+        color: rgba(255,255,255,0.9);
+        text-decoration: none;
+    }
+    
+    @media (max-width: 640px) {
+        .hero-box { padding: 48px 20px; }
+        .hero-logo-img { height: 56px; margin-bottom: 24px; }
+        .hero-title { font-size: 26px !important; }
+        .hero-subtitle { font-size: 22px !important; }
+        .hero-desc { font-size: 15px !important; }
+        .hero-cta-btn { font-size: 16px; padding: 14px 32px; }
+        .trust-grid { gap: 20px; }
+        .form-header-title { font-size: 22px !important; }
+    }
+    </style>
     """, unsafe_allow_html=True)
     
-    # ===== 신뢰 배지 =====
-    st.markdown("""
-    <div class="trust-section">
-        <div class="trust-badges">
-            <div class="trust-badge">
-                <span class="icon">🏛️</span>
-                <span class="text">정부 협력 서비스</span>
-            </div>
-            <div class="trust-badge">
-                <span class="icon">👨‍💼</span>
-                <span class="text">전문가 1:1 매칭</span>
-            </div>
-            <div class="trust-badge">
-                <span class="icon">💯</span>
-                <span class="text">무료 상담</span>
-            </div>
-            <div class="trust-badge">
-                <span class="icon">⚡</span>
-                <span class="text">빠른 응대</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ===== 폼 섹션 =====
-    st.markdown('<div id="form-section"></div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="form-section">
-        <div class="form-header">
-            <h2>📋 간편 상담 신청</h2>
-            <p>30초면 완료! 빠르게 연락드립니다.</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 세션 상태 초기화
+    # 세션 상태
     if 'submitted' not in st.session_state:
         st.session_state.submitted = False
+    
+    # 히어로 섹션
+    st.markdown(f"""
+    <div class="hero-box">
+        <img src="{LOGO_URL}" alt="{BRAND_NAME}" class="hero-logo-img">
+        <div class="hero-title">정책자금 · 정부지원금</div>
+        <div class="hero-subtitle">무료 상담신청</div>
+        <div class="hero-desc">
+            우리 기업에 딱 맞는 자금,<br>
+            전문가가 1:1로 매칭해 드립니다.
+        </div>
+        <a href="#form-section" class="hero-cta-btn">지금 무료 상담받기 →</a>
+        <div class="scroll-hint">↓ 아래에서 간단히 신청하세요</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 신뢰 배지
+    st.markdown("""
+    <div class="trust-box">
+        <div class="trust-grid">
+            <div class="trust-item">
+                <span class="trust-icon">🏛️</span>
+                <span class="trust-text">정부 협력 서비스</span>
+            </div>
+            <div class="trust-item">
+                <span class="trust-icon">👨‍💼</span>
+                <span class="trust-text">전문가 1:1 매칭</span>
+            </div>
+            <div class="trust-item">
+                <span class="trust-icon">💯</span>
+                <span class="trust-text">무료 상담</span>
+            </div>
+            <div class="trust-item">
+                <span class="trust-icon">⚡</span>
+                <span class="trust-text">빠른 응대</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 폼 헤더
+    st.markdown("""
+    <div id="form-section"></div>
+    <div class="form-header-box">
+        <div class="form-header-title">📋 간편 상담 신청</div>
+        <div class="form-header-desc">30초면 완료! 빠르게 연락드립니다.</div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # 폼
     with st.form("quick_form"):
         name = st.text_input("대표자 성함", placeholder="예: 홍길동")
-        
         phone_raw = st.text_input("연락처", placeholder="예: 01012345678")
         
         business_type = st.selectbox(
@@ -492,8 +359,6 @@ def main():
             "필요 자금 규모",
             ["선택해주세요", "3천만원 미만", "3천만원~1억원", "1억원~3억원", "3억원~5억원", "5억원 이상"]
         )
-        
-        st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -507,7 +372,6 @@ def main():
             phone_digits = _digits_only(phone_raw)
             phone_formatted = format_phone(phone_digits)
             
-            # 유효성 검사
             errors = []
             if not name or len(name.strip()) < 2:
                 errors.append("성함을 입력해주세요")
@@ -539,7 +403,6 @@ def main():
                         'receipt_no': receipt_no,
                         'release_version': RELEASE_VERSION,
                         'source': 'landing_hero',
-                        # 기본값 설정
                         'region': '미입력',
                         'industry': '미입력',
                         'employee_count': '미입력',
@@ -553,15 +416,11 @@ def main():
                     result = save_to_sheet(data)
                     send_telegram({**data, 'timestamp': timestamp})
                     
-                    if result.get('status') == 'success':
-                        st.session_state.submitted = True
-                        st.session_state.receipt_no = receipt_no
-                        st.rerun()
-                    else:
-                        st.success(f"✅ 상담 신청이 완료되었습니다!\n\n접수번호: **{receipt_no}**")
-                        st.info("📞 1영업일 내 전문가가 연락드립니다.")
+                    st.session_state.submitted = True
+                    st.session_state.receipt_no = receipt_no
+                    st.rerun()
     
-    # 제출 완료 상태
+    # 제출 완료
     if st.session_state.submitted:
         st.success(f"✅ 상담 신청이 완료되었습니다!")
         st.info(f"📋 접수번호: **{st.session_state.get('receipt_no', '')}**")
@@ -579,13 +438,12 @@ def main():
             st.session_state.submitted = False
             st.rerun()
     
-    # ===== 푸터 =====
+    # 푸터
     st.markdown(f"""
-    <div class="footer">
+    <div class="footer-box">
         <strong>{BRAND_NAME}</strong><br>
         중소벤처기업부 · 소상공인시장진흥공단 협력 민간 상담 서비스<br><br>
-        <a href="{KAKAO_CHANNEL_URL}" target="_blank">카카오 채널</a> ｜ 
-        <a href="tel:010-0000-0000">전화 상담</a><br><br>
+        <a href="{KAKAO_CHANNEL_URL}" target="_blank">카카오 채널</a><br><br>
         © 2025 {BRAND_NAME}. All rights reserved.
     </div>
     """, unsafe_allow_html=True)
