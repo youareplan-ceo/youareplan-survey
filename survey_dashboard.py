@@ -35,6 +35,9 @@ def calculate_financial_metrics(s2: Dict) -> Dict:
         "growth_rate": "-", "growth_status": "gray", "growth_msg": "데이터 없음"
     }
     
+    if not s2:  # 데이터가 없으면 기본값 반환
+        return metrics
+
     try:
         # 부채비율
         capital = int(str(s2.get('capital_amount', '0')).replace(',', '').replace('만원', ''))
@@ -66,7 +69,10 @@ def calculate_financial_metrics(s2: Dict) -> Dict:
 # 리포트 생성 함수
 # ==============================
 def generate_full_report(data: Dict[str, Any]) -> str:
-    s1, s2, s3 = data.get("stage1", {}), data.get("stage2", {}), data.get("stage3", {})
+    # 수정: 데이터가 None일 경우 빈 딕셔너리로 처리 (or {})
+    s1 = data.get("stage1") or {}
+    s2 = data.get("stage2") or {}
+    s3 = data.get("stage3") or {}
     metrics = calculate_financial_metrics(s2)
     
     return f"""
@@ -115,7 +121,10 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     except Exception as e: return f"⚠️ 오류: {str(e)}"
 
 def generate_ai_prompt(data: Dict[str, Any]) -> str:
-    s1, s2, s3 = data.get("stage1", {}), data.get("stage2", {}), data.get("stage3", {})
+    # 수정: 데이터가 None일 경우 빈 딕셔너리로 처리 (or {})
+    s1 = data.get("stage1") or {}
+    s2 = data.get("stage2") or {}
+    s3 = data.get("stage3") or {}
     metrics = calculate_financial_metrics(s2)
     return f"""
 # 기업 정책자금 분석 요청
@@ -199,7 +208,10 @@ def main():
         
         if result.get("status") == "success":
             data = result.get("data", {})
-            s1, s2, s3 = data.get("stage1", {}), data.get("stage2", {}), data.get("stage3", {})
+            # 수정: 데이터가 None일 경우 빈 딕셔너리로 처리 (or {})
+            s1 = data.get("stage1") or {}
+            s2 = data.get("stage2") or {}
+            s3 = data.get("stage3") or {}
             metrics = calculate_financial_metrics(s2)
             
             # [1] 헤더 요약 및 다운로드
