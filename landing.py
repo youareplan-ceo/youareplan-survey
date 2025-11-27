@@ -27,13 +27,9 @@ META_PIXEL_ID = "1372327777599495"
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 
-# 구글 시트 연동 URL (환경변수 사용)
+# 구글 시트 연동 URL
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
-
-# 텔레그램 설정 (환경변수 사용)
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # ==============================
 # 픽셀 코드 삽입
@@ -59,29 +55,6 @@ def format_phone(d: str) -> str:
         return f"{d[0:3]}-{d[3:7]}-{d[7:11]}"
     return d
 
-def send_telegram(data: dict) -> bool:
-    """텔레그램 알림 전송"""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return False
-    try:
-        msg = (
-            f"🚀 [광고랜딩] 신규 상담 신청\n"
-            f"--------------------------------\n"
-            f"👤 성함: {data.get('name')}\n"
-            f"📞 연락처: {data.get('phone')}\n"
-            f"🏢 형태: {data.get('business_type')}\n"
-            f"💰 자금: {data.get('funding_amount')}\n"
-            f"📋 번호: {data.get('receipt_no')}"
-        )
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
-            timeout=5
-        )
-        return True
-    except:
-        return False
-
 def save_to_sheet(data: dict) -> dict:
     try:
         data['token'] = API_TOKEN
@@ -94,7 +67,7 @@ def save_to_sheet(data: dict) -> dict:
 # 메인 함수
 # ==============================
 def main():
-    # CSS 스타일 (드롭다운 가시성 해결 포함)
+    # CSS 스타일: 시스템 테마 자동 대응 (강제 색상 제거)
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
@@ -113,7 +86,7 @@ def main():
     
     #MainMenu, footer, header { display: none !important; }
 
-    /* 히어로 섹션 */
+    /* 히어로 섹션 - 브랜드 색상만 고정 */
     .hero-box {
         background: linear-gradient(135deg, #002855 0%, #003d7a 100%);
         padding: 40px 20px;
@@ -121,30 +94,29 @@ def main():
         border-radius: 20px;
         margin-bottom: 20px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        color: white !important; 
     }
     
     .hero-title {
-        font-size: 26px !important;
-        font-weight: 900 !important;
-        margin-bottom: 8px !important;
-        color: white !important;
+        font-size: 26px;
+        font-weight: 900;
+        margin-bottom: 8px;
+        color: white;
     }
     
     .hero-subtitle {
-        color: #FFD700 !important;
-        font-size: 22px !important;
-        font-weight: 700 !important;
-        margin-bottom: 15px !important;
+        color: #FFD700;
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 15px;
     }
     
     .hero-desc {
-        color: rgba(255,255,255,0.9) !important;
-        font-size: 15px !important;
-        line-height: 1.5 !important;
+        color: rgba(255,255,255,0.9);
+        font-size: 15px;
+        line-height: 1.5;
     }
 
-    /* 신뢰 섹션 */
+    /* 신뢰 섹션 - 투명 배경으로 테마 자동 대응 */
     .trust-box {
         background: rgba(128, 128, 128, 0.1);
         padding: 15px;
@@ -157,63 +129,44 @@ def main():
         border: 1px solid rgba(128, 128, 128, 0.2);
     }
     
-    /* [핵심] 입력창 및 드롭다운 가시성 해결 */
-    
-    /* 1. 입력창 (이름, 연락처) */
+    /* 입력창 - Streamlit 기본 테마 사용 (강제 색상 제거) */
     .stTextInput input {
-        background-color: #2c2c2c !important; /* 다크 모드와 어울리는 배경 */
-        color: #ffffff !important; /* 흰색 글씨 */
-        border: 1px solid #444 !important;
-        border-radius: 10px !important;
+        border-radius: 10px;
     }
 
-    /* 2. 선택창 (닫혀있을 때) */
     .stSelectbox div[data-baseweb="select"] > div {
-        background-color: #2c2c2c !important;
-        color: #ffffff !important;
-        border-color: #444 !important;
-        border-radius: 10px !important;
+        border-radius: 10px;
     }
-    
-    /* 선택된 값의 텍스트 색상 강제 지정 */
-    .stSelectbox div[data-baseweb="select"] span {
-        color: #ffffff !important;
-    }
-    
-    /* 3. 선택창 (열렸을 때 - 팝업 메뉴) */
-    div[data-baseweb="popover"] {
-        background-color: #ffffff !important; /* 메뉴 배경은 흰색 */
-    }
-    
-    div[data-baseweb="popover"] li, div[data-baseweb="popover"] div {
-        color: #000000 !important; /* 메뉴 글씨는 검은색 */
-    }
-    
-    /* 제출 버튼 */
+
+    /* 제출 버튼 - 브랜드 색상만 고정 */
     div[data-testid="stFormSubmitButton"] button {
         background: #002855 !important;
         color: white !important;
         border: none !important;
         width: 100%;
-        padding: 16px !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        border-radius: 12px !important;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: bold;
+        border-radius: 12px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         transition: all 0.2s;
+        margin-top: 10px;
+    }
+    
+    div[data-testid="stFormSubmitButton"] button:hover {
+        background: #001a38 !important;
     }
     
     div[data-testid="stFormSubmitButton"] button:active {
         transform: scale(0.98);
-        background: #001a38 !important;
     }
 
     /* 모바일 미디어 쿼리 */
     @media screen and (max-width: 480px) {
-        .hero-title { font-size: 22px !important; }
-        .hero-subtitle { font-size: 18px !important; }
-        .hero-desc { font-size: 14px !important; }
-        div[data-testid="stFormSubmitButton"] button { font-size: 16px !important; }
+        .hero-title { font-size: 22px; }
+        .hero-subtitle { font-size: 18px; }
+        .hero-desc { font-size: 14px; }
+        div[data-testid="stFormSubmitButton"] button { font-size: 16px; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -299,19 +252,16 @@ def main():
                         'source': 'landing_page_mobile'
                     }
                     
-                    # 구글 시트 저장 및 텔레그램 전송
                     save_to_sheet(data)
-                    send_telegram(data)
                     
-                    # 픽셀 이벤트
+                    # 픽셀 Lead 이벤트
                     st.markdown(f"<script>fbq('track', 'Lead');</script>", unsafe_allow_html=True)
                     
-                    # 성공 화면
                     st.success("✅ 신청 완료!")
                     st.markdown(f"""
                         <div style="
-                            background: rgba(0, 40, 85, 0.05); 
-                            border: 1px solid rgba(0, 40, 85, 0.1);
+                            background: rgba(0, 40, 85, 0.1); 
+                            border: 1px solid rgba(0, 40, 85, 0.2);
                             padding: 20px; 
                             border-radius: 15px; 
                             text-align: center; 
@@ -325,7 +275,7 @@ def main():
                     """, unsafe_allow_html=True)
                     time.sleep(300)
 
-    # 푸터
+    # 푸터 - 반투명으로 테마 자동 대응
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 11px;">
         <strong>유아플랜</strong><br>
