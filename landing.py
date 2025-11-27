@@ -27,9 +27,11 @@ META_PIXEL_ID = "1372327777599495"
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 
+# 구글 시트 연동 URL (환경변수 사용)
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 
+# 텔레그램 설정 (환경변수 사용)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
@@ -58,10 +60,19 @@ def format_phone(d: str) -> str:
     return d
 
 def send_telegram(data: dict) -> bool:
+    """텔레그램 알림 전송"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return False
     try:
-        msg = f"🚀 신규 상담 신청\n\n👤 {data.get('name')}\n📞 {data.get('phone')}\n🏢 {data.get('business_type')}\n💰 {data.get('funding_amount')}"
+        msg = (
+            f"🚀 [광고랜딩] 신규 상담 신청\n"
+            f"--------------------------------\n"
+            f"👤 성함: {data.get('name')}\n"
+            f"📞 연락처: {data.get('phone')}\n"
+            f"🏢 형태: {data.get('business_type')}\n"
+            f"💰 자금: {data.get('funding_amount')}\n"
+            f"📋 번호: {data.get('receipt_no')}"
+        )
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
             json={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
@@ -83,7 +94,7 @@ def save_to_sheet(data: dict) -> dict:
 # 메인 함수
 # ==============================
 def main():
-    # CSS 스타일
+    # CSS 스타일 (드롭다운 가시성 해결 포함)
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
@@ -97,20 +108,20 @@ def main():
         padding-bottom: 3rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
-        max-width: 600px !important;
+        max-width: 600px !important; 
     }
     
     #MainMenu, footer, header { display: none !important; }
 
-    /* 히어로 섹션: 로고 강조를 위해 패딩 조정 */
+    /* 히어로 섹션 */
     .hero-box {
         background: linear-gradient(135deg, #002855 0%, #003d7a 100%);
-        padding: 50px 20px 40px 20px; /* 상단 패딩 약간 증가 */
+        padding: 40px 20px;
         text-align: center;
         border-radius: 20px;
         margin-bottom: 20px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        color: white !important;
+        color: white !important; 
     }
     
     .hero-title {
@@ -146,12 +157,39 @@ def main():
         border: 1px solid rgba(128, 128, 128, 0.2);
     }
     
-    .stTextInput input, .stSelectbox div[data-baseweb="select"] > div {
+    /* [핵심] 입력창 및 드롭다운 가시성 해결 */
+    
+    /* 1. 입력창 (이름, 연락처) */
+    .stTextInput input {
+        background-color: #2c2c2c !important; /* 다크 모드와 어울리는 배경 */
+        color: #ffffff !important; /* 흰색 글씨 */
+        border: 1px solid #444 !important;
         border-radius: 10px !important;
-        padding-top: 10px;
-        padding-bottom: 10px;
     }
 
+    /* 2. 선택창 (닫혀있을 때) */
+    .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #2c2c2c !important;
+        color: #ffffff !important;
+        border-color: #444 !important;
+        border-radius: 10px !important;
+    }
+    
+    /* 선택된 값의 텍스트 색상 강제 지정 */
+    .stSelectbox div[data-baseweb="select"] span {
+        color: #ffffff !important;
+    }
+    
+    /* 3. 선택창 (열렸을 때 - 팝업 메뉴) */
+    div[data-baseweb="popover"] {
+        background-color: #ffffff !important; /* 메뉴 배경은 흰색 */
+    }
+    
+    div[data-baseweb="popover"] li, div[data-baseweb="popover"] div {
+        color: #000000 !important; /* 메뉴 글씨는 검은색 */
+    }
+    
+    /* 제출 버튼 */
     div[data-testid="stFormSubmitButton"] button {
         background: #002855 !important;
         color: white !important;
@@ -170,6 +208,7 @@ def main():
         background: #001a38 !important;
     }
 
+    /* 모바일 미디어 쿼리 */
     @media screen and (max-width: 480px) {
         .hero-title { font-size: 22px !important; }
         .hero-subtitle { font-size: 18px !important; }
@@ -183,11 +222,10 @@ def main():
         st.session_state.submitted = False
     
     # 1. 히어로 섹션
-    # 로고 크기를 height: 85px로 크게 수정
     st.markdown(f"""
     <div class="hero-box">
-        <div style="display: flex; justify-content: center; margin-bottom: 24px;">
-            <img src="{LOGO_URL}" style="height: 85px; width: auto; object-fit: contain;">
+        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+            <img src="{LOGO_URL}" style="height: 50px; width: auto; object-fit: contain;">
         </div>
         <div class="hero-title">정책자금 · 정부지원금</div>
         <div class="hero-subtitle">무료 상담신청</div>
@@ -231,7 +269,7 @@ def main():
         with col_m:
             marketing = st.checkbox("마케팅 수신 동의 (선택)", value=True)
         
-        st.write("")
+        st.write("") 
         submitted = st.form_submit_button("📩 무료 상담 신청하기")
         
         if submitted:
@@ -261,11 +299,14 @@ def main():
                         'source': 'landing_page_mobile'
                     }
                     
+                    # 구글 시트 저장 및 텔레그램 전송
                     save_to_sheet(data)
                     send_telegram(data)
                     
+                    # 픽셀 이벤트
                     st.markdown(f"<script>fbq('track', 'Lead');</script>", unsafe_allow_html=True)
                     
+                    # 성공 화면
                     st.success("✅ 신청 완료!")
                     st.markdown(f"""
                         <div style="
