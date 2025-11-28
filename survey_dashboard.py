@@ -143,7 +143,9 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        
+        # ⚠️ NOTE: gemini-pro로 변경하여 테스트합니다. (1.5-flash 실패했으므로)
+        model = genai.GenerativeModel('gemini-pro') 
         
         s3 = data.get("stage3")
         
@@ -392,6 +394,27 @@ def main():
     if not GEMINI_API_KEY:
         st.error("⚠️ GEMINI_API_KEY 환경변수가 설정되지 않았습니다. Render 설정을 확인하세요.")
         return
+
+    # ==========================================================
+    # 🚨 API 키 인증 테스트 및 모델 목록 확인 (디버깅 코드 추가)
+    # ==========================================================
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        
+        # 모델 목록을 가져와서 API 키의 유효성을 테스트합니다.
+        model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        if 'models/gemini-pro' in model_list or 'models/gemini-1.5-flash' in model_list:
+            st.success(f"✅ API 키 인증 성공! 'gemini-pro' 모델 사용 가능. (총 {len(model_list)}개 모델)")
+        else:
+            # list_models()는 성공했는데 pro나 flash가 목록에 없는 경우
+            st.warning(f"⚠️ API 키는 유효하나, 핵심 모델이 목록에 없습니다. (총 {len(model_list)}개 모델) 프로젝트 접근 권한 문제 의심.")
+            
+    except Exception as e:
+        # 키가 잘못되었거나, 서비스가 완전히 비활성화된 경우 발생하는 에러입니다.
+        st.error(f"❌ 치명적 오류: API 키가 Google 서버에서 인증되지 않습니다. 에러 메시지: {e}")
+        return # API 인증 실패 시, 더 이상 진행하지 않습니다.
+    # ==========================================================
 
     # 검색바
     col1, col2 = st.columns([4, 1])
