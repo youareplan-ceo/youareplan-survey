@@ -5,6 +5,7 @@ import os
 import json
 import time
 from datetime import datetime
+import calendar # 날짜 계산을 위해 추가
 from uuid import uuid4
 from typing import Optional
 
@@ -255,7 +256,30 @@ def main():
         
         col_date, col_name = st.columns(2)
         with col_date:
-            startup_date = st.date_input("개업 연월일", min_value=datetime(1990, 1, 1))
+            # st.date_input 대신 한국형 Selectbox UI 적용
+            st.markdown('<div style="font-size:14px; margin-bottom:5px;">개업 연월일</div>', unsafe_allow_html=True)
+            d_col1, d_col2, d_col3 = st.columns([1.3, 1, 1])
+            
+            this_year = datetime.now().year
+            
+            with d_col1:
+                # 년도: 현재부터 1990년까지 역순
+                s_year = st.selectbox("년", range(this_year, 1989, -1), label_visibility="collapsed", key="s_year")
+            with d_col2:
+                # 월: 1~12월
+                s_month = st.selectbox("월", range(1, 13), format_func=lambda x: f"{x}월", label_visibility="collapsed", key="s_month")
+            with d_col3:
+                # 일: 1~31일
+                s_day = st.selectbox("일", range(1, 32), format_func=lambda x: f"{x}일", label_visibility="collapsed", key="s_day")
+
+            # 날짜 유효성 검사 및 객체 생성 (예: 2월 30일 선택 시 자동 보정)
+            try:
+                startup_date = datetime(s_year, s_month, s_day).date()
+            except ValueError:
+                # 해당 월의 마지막 날짜로 자동 설정
+                last_day = calendar.monthrange(s_year, s_month)[1]
+                startup_date = datetime(s_year, s_month, last_day).date()
+
         with col_name:
             company_name = st.text_input("상호명")
 

@@ -3,6 +3,7 @@ import requests
 import os
 import json
 from datetime import datetime
+from urllib.parse import unquote
 
 # ==============================
 # 페이지 설정
@@ -19,11 +20,27 @@ st.set_page_config(
 # ==============================
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
-RELEASE_VERSION = "v2025-11-27-admin-mode"
+RELEASE_VERSION = "v2025-11-28-prefill"
 
 # 실제 구글 앱스 스크립트 URL (환경변수 설정 필수)
 APPS_SCRIPT_URL = os.getenv("THIRD_GAS_URL", "https://script.google.com/macros/s/YOUR_GAS_ID/exec")
 API_TOKEN = os.getenv("API_TOKEN_3", "youareplan_stage3")
+
+# ==============================
+# 쿼리 파라미터 읽기
+# ==============================
+def get_prefill_params():
+    """URL 쿼리 파라미터에서 고객 정보 읽기"""
+    try:
+        qp = st.query_params
+        return {
+            "name": unquote(qp.get("name", "")),
+            "phone": unquote(qp.get("phone", "")),
+            "receipt_no": unquote(qp.get("r", "")),
+            "uuid": unquote(qp.get("u", ""))
+        }
+    except:
+        return {"name": "", "phone": "", "receipt_no": "", "uuid": ""}
 
 # ==============================
 # 데이터 전송 함수 (실제 연동)
@@ -32,7 +49,6 @@ def save_consultation_result(data: dict) -> dict:
     """컨설턴트 입력 데이터를 구글 시트로 전송"""
     try:
         data['token'] = API_TOKEN
-        # 실제 POST 요청
         response = requests.post(APPS_SCRIPT_URL, json=data, timeout=20)
         
         if response.status_code == 200:
@@ -96,6 +112,19 @@ html, body, [class*="css"] {
 .stTextArea textarea {
     min-height: 120px;
 }
+
+/* 자동 입력된 필드 스타일 */
+.prefilled-info {
+    background: #E8F5E9;
+    border: 1px solid #81C784;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.prefilled-info strong {
+    color: #2E7D32;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -103,6 +132,9 @@ html, body, [class*="css"] {
 # 메인 함수
 # ==============================
 def main():
+    # 쿼리 파라미터에서 고객 정보 읽기
+    prefill = get_prefill_params()
+    
     # 헤더
     st.markdown(f"""
     <div class="unified-header">
@@ -111,16 +143,35 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # 자동 입력된 정보 표시
+    if prefill["name"] or prefill["receipt_no"]:
+        st.markdown(f"""
+        <div class="prefilled-info">
+            ✅ <strong>고객 정보가 자동으로 입력되었습니다.</strong><br>
+            👤 {prefill["name"]} | 📞 {prefill["phone"]} | 🎫 {prefill["receipt_no"]}
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.info("📞 고객과 통화하며 내용을 정리한 후, 하단의 **[상담 결과 저장]** 버튼을 눌러주세요.")
 
     with st.form("admin_consult_form"):
         
-        # 1. 고객 식별 정보
+        # 1. 고객 식별 정보 (자동 입력)
         st.markdown('<div class="section-title">👤 고객 정보 확인</div>', unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
-        with col1: client_name = st.text_input("고객 성함")
-        with col2: client_phone = st.text_input("연락처")
-        with col3: receipt_no = st.text_input("접수번호 (선택)", placeholder="YP...")
+        with col1: 
+            client_name = st.text_input("고객 성함", value=prefill["name"])
+        with col2: 
+            client_phone = st.text_input("연락처", value=prefill["phone"])
+        with col3: 
+            # 접수번호가 있으면 수정 불가
+            if prefill["receipt_no"]:
+                receipt_no = st.text_input("접수번호", value=prefill["receipt_no"], disabled=True)
+            else:
+                receipt_no = st.text_input("접수번호 (선택)", placeholder="YP...")
+
+        # UUID 숨김 저장
+        uuid_val = prefill["uuid"]
 
         st.markdown("---")
 
@@ -162,10 +213,11 @@ def main():
             else:
                 # 데이터 구성
                 data = {
-                    "action": "save_consultation", # GAS에서 구분하기 위한 액션명
+                    "action": "save_consultation",
                     "name": client_name,
                     "phone": client_phone,
-                    "receipt_no": receipt_no,
+                    "receipt_no": receipt_no or prefill["receipt_no"],
+                    "uuid": uuid_val,
                     "collateral": collateral,
                     "debt_info": debt_info,
                     "financial_check": financial_check,
@@ -176,7 +228,6 @@ def main():
                 }
 
                 with st.spinner("구글 시트에 저장 중입니다..."):
-                    # 실제 전송 실행
                     result = save_consultation_result(data)
                     
                     if result.get("status") == "success" or result.get("ok") == True:
