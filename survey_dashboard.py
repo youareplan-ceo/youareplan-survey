@@ -145,7 +145,7 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
         genai.configure(api_key=api_key)
         
         # ⚠️ NOTE: gemini-pro로 변경하여 테스트합니다. (1.5-flash 실패했으므로)
-        model = genai.GenerativeModel('gemini-pro') 
+        model = genai.GenerativeModel('gemini-1.5-flash') 
         
         s3 = data.get("stage3")
         
