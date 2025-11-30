@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import os
 import base64
 import google.generativeai as genai
+import importlib.metadata
 
 # ==============================
 # 1. 페이지 설정
@@ -144,25 +145,44 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     try:
         genai.configure(api_key=api_key)
         
-        # ⚠️ NOTE: gemini-pro로 변경하여 테스트합니다. (1.5-flash 실패했으므로)
-        model = genai.GenerativeModel('gemini-1.5-flash') 
+        # [수정됨] 사용 가능한 모델을 동적으로 확인하여 선택
+        # 1순위: 1.5-flash (빠르고 저렴), 2순위: 1.5-pro, 3순위: pro (구버전)
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        target_model_name = 'gemini-1.5-flash' # 기본값
+        
+        # 모델 이름 매칭 로직 (models/ 접두사 처리)
+        if 'models/gemini-1.5-flash' in available_models:
+            target_model_name = 'gemini-1.5-flash'
+        elif 'models/gemini-pro' in available_models:
+            target_model_name = 'gemini-pro'
+        elif len(available_models) > 0:
+            # 선호 모델이 없으면 리스트의 첫 번째 모델 사용
+            target_model_name = available_models[0].replace('models/', '')
+        
+        model = genai.GenerativeModel(target_model_name)
         
         s3 = data.get("stage3")
         
         # 3차 데이터 유무에 따라 분기 (coach_notes로 판단)
         if s3 and s3.get('coach_notes'):
             prompt = generate_execution_prompt(data)
-            msg = "🚀 1~3차 데이터 기반 [최종 실행 전략] 수립 중..."
+            msg = f"🚀 [{target_model_name}] 1~3차 데이터 기반 [최종 실행 전략] 수립 중..."
         else:
             prompt = generate_contract_prompt(data)
-            msg = "🔍 1,2차 데이터 기반 [계약 가능성] 심사 중..."
+            msg = f"🔍 [{target_model_name}] 1,2차 데이터 기반 [계약 가능성] 심사 중..."
             
         with st.spinner(msg):
             response = model.generate_content(prompt)
             return response.text
             
     except Exception as e:
-        return f"⚠️ AI 분석 오류: {str(e)}"
+        # 에러 발생 시 상세 정보를 반환하여 디버깅 돕기
+        try:
+            ver = importlib.metadata.version('google-generativeai')
+        except:
+            ver = "unknown"
+        return f"⚠️ AI 분석 오류: {str(e)}\n(SDK Version: {ver})"
 
 def generate_contract_prompt(data: Dict[str, Any]) -> str:
     """1,2차 기반 계약 심사 프롬프트"""
@@ -386,7 +406,7 @@ def main():
             <img src="{LOGO_URL}" alt="Logo">
             <h1>통합 고객 관리 대시보드</h1>
         </div>
-        <div style="font-size:12px; opacity:0.8;">v2.0 | Admin</div>
+        <div style="font-size:12px; opacity:0.8;">v2.1 | Admin</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -396,25 +416,34 @@ def main():
         return
 
     # ==========================================================
-    # 🚨 API 키 인증 테스트 및 모델 목록 확인 (디버깅 코드 추가)
+    # 🚨 API 키 및 SDK 버전 진단
     # ==========================================================
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         
-        # 모델 목록을 가져와서 API 키의 유효성을 테스트합니다.
+        # 현재 SDK 버전 확인 (이게 중요)
+        try:
+            sdk_version = importlib.metadata.version('google-generativeai')
+        except:
+            sdk_version = "unknown"
+            
+        # 모델 목록 조회
         model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
-        if 'models/gemini-pro' in model_list or 'models/gemini-1.5-flash' in model_list:
-            st.success(f"✅ API 키 인증 성공! 'gemini-pro' 모델 사용 가능. (총 {len(model_list)}개 모델)")
+        # UI에 디버그 정보 표시 (성공 시에는 작게)
+        if 'models/gemini-1.5-flash' in model_list or 'models/gemini-pro' in model_list:
+            st.toast(f"✅ AI 연결 성공 (SDK v{sdk_version})")
         else:
-            # list_models()는 성공했는데 pro나 flash가 목록에 없는 경우
-            st.warning(f"⚠️ API 키는 유효하나, 핵심 모델이 목록에 없습니다. (총 {len(model_list)}개 모델) 프로젝트 접근 권한 문제 의심.")
+            st.warning(f"""
+            ⚠️ **AI 연결 경고** (SDK v{sdk_version})
+            
+            사용 가능한 모델이 제한적입니다. `requirements.txt`에 `google-generativeai>=0.8.3`이 포함되었는지 확인하세요.
+            감지된 모델 수: {len(model_list)}개
+            """)
             
     except Exception as e:
-        # 키가 잘못되었거나, 서비스가 완전히 비활성화된 경우 발생하는 에러입니다.
-        st.error(f"❌ 치명적 오류: API 키가 Google 서버에서 인증되지 않습니다. 에러 메시지: {e}")
-        return # API 인증 실패 시, 더 이상 진행하지 않습니다.
-    # ==========================================================
+        st.error(f"❌ 치명적 오류: API 연결 실패. {e}")
+        return 
 
     # 검색바
     col1, col2 = st.columns([4, 1])
@@ -439,7 +468,7 @@ def main():
             s3 = data.get("stage3") or {}
             metrics = calculate_financial_metrics(s2)
             
-            # 단계 판단 (coach_notes로 3차 완료 여부 확인)
+            # 단계 판단
             has_s3 = bool(s3 and s3.get('coach_notes'))
             
             # 상단 요약

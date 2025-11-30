@@ -16,13 +16,11 @@ st.set_page_config(
 )
 
 # ==============================
-# 환경 설정 (배포 시 Secrets에 설정 필요)
+# 환경 설정
 # ==============================
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 RELEASE_VERSION = "v2025-11-27-stable"
-
-# 실제 구글 앱스 스크립트 URL (환경변수 없으면 기본값 사용)
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 KAKAO_CHANNEL_URL = "https://pf.kakao.com/_LWxexmn"
@@ -39,11 +37,10 @@ def format_phone(d: str) -> str:
     return d
 
 def save_to_sheet(data: dict) -> dict:
-    """구글 시트로 데이터를 전송하는 실제 함수"""
     try:
         data['token'] = API_TOKEN
-        # 실제 POST 요청 전송
-        resp = requests.post(APPS_SCRIPT_URL, json=data, timeout=15)
+        # 타임아웃을 20초로 약간 늘려 안정성 확보
+        resp = requests.post(APPS_SCRIPT_URL, json=data, timeout=20)
         return resp.json() if resp.status_code == 200 else {"status": "error", "message": f"HTTP {resp.status_code}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -59,65 +56,19 @@ REVENUES = ["매출 없음", "5천만원 미만", "5천만원~1억원", "1억원
 FUNDING_AMOUNTS = ["3천만원 미만", "3천만원~1억원", "1-3억원", "3-5억원", "5억원 이상"]
 
 # ==============================
-# CSS 스타일 (적응형)
+# CSS 스타일
 # ==============================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Noto Sans KR', sans-serif;
-}
-
+html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 #MainMenu, footer, header { display: none !important; }
-
-.block-container {
-    padding-top: 1rem !important;
-    padding-bottom: 3rem !important;
-    max-width: 700px !important;
-}
-
-/* 통합 헤더 (네이비) */
-.unified-header {
-    background: #002855;
-    padding: 24px 20px;
-    text-align: center;
-    border-radius: 12px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.unified-header img {
-    height: 48px;
-    margin-bottom: 12px;
-    object-fit: contain;
-}
-
-.unified-header .gov-label {
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 13px;
-    font-weight: 500;
-}
-
-.section-header {
-    font-size: 18px;
-    font-weight: 700;
-    margin-top: 24px;
-    margin-bottom: 12px;
-    border-bottom: 2px solid rgba(128, 128, 128, 0.2);
-    padding-bottom: 8px;
-}
-
-div[data-testid="stFormSubmitButton"] button {
-    background: #002855 !important;
-    color: white !important;
-    border: none !important;
-    padding: 14px 24px !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    width: 100%;
-    margin-top: 10px;
-}
+.block-container { padding-top: 1rem !important; padding-bottom: 3rem !important; max-width: 700px !important; }
+.unified-header { background: #002855; padding: 24px 20px; text-align: center; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+.unified-header img { height: 48px; margin-bottom: 12px; object-fit: contain; }
+.unified-header .gov-label { color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 500; }
+.section-header { font-size: 18px; font-weight: 700; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid rgba(128, 128, 128, 0.2); padding-bottom: 8px; }
+div[data-testid="stFormSubmitButton"] button { background: #002855 !important; color: white !important; border: none !important; padding: 14px 24px !important; border-radius: 8px !important; font-weight: 700 !important; width: 100%; margin-top: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,7 +76,10 @@ div[data-testid="stFormSubmitButton"] button {
 # 메인 함수
 # ==============================
 def main():
-    # 헤더
+    if 'submitted' not in st.session_state:
+        st.session_state.submitted = False
+    
+    # [수정됨] 헤더는 항상 표시
     st.markdown(f"""
     <div class="unified-header">
         <img src="{LOGO_URL}" alt="{BRAND_NAME}">
@@ -133,11 +87,30 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # [핵심 수정] 제출 완료 상태면 결과 화면만 보여주고 함수 종료 (폼 렌더링 X)
+    if st.session_state.submitted:
+        receipt_no = st.session_state.get('receipt_no', '알 수 없음')
+        
+        st.success("✅ 상담 신청이 완료되었습니다!")
+        st.markdown(f"""
+        <div style="padding:20px; border-radius:10px; background-color:rgba(0,40,85,0.05); border:1px solid rgba(0,40,85,0.1); margin: 20px 0; text-align:center;">
+            <h3 style="margin:0; color:#002855; font-size: 24px;">접수번호: {receipt_no}</h3>
+            <p style="margin-top:10px; margin-bottom:0; color: #555;">담당자가 1영업일 내 검토 후 연락드립니다.</p>
+        </div>
+        <div style="text-align:center; margin-top: 20px;">
+            <a href="{KAKAO_CHANNEL_URL}" target="_blank" style="display:inline-block; background:#FEE500; color:#3C1E1E; padding:15px 30px; border-radius:8px; text-decoration:none; font-weight:bold; font-size: 16px;">
+                💬 카카오톡으로 문의하기
+            </a>
+        </div>
+        <div style="text-align:center; margin-top: 30px;">
+            <button onclick="window.location.reload()" style="background:none; border:none; color:#888; text-decoration:underline; cursor:pointer;">새로운 상담 신청하기</button>
+        </div>
+        """, unsafe_allow_html=True)
+        return  # 여기서 함수를 종료하여 폼이 다시 그려지지 않게 함
+
+    # --- 입력 폼 (제출 전일 때만 실행) ---
     st.markdown("### 📋 1차 기초 상담 신청")
     st.caption("우리 기업의 정책자금 지원 가능성을 검토하기 위한 기초 단계입니다.")
-    
-    if 'submitted' not in st.session_state:
-        st.session_state.submitted = False
 
     with st.form("survey_form"):
         st.markdown('<div class="section-header">👤 기본 정보</div>', unsafe_allow_html=True)
@@ -188,7 +161,7 @@ def main():
             elif not privacy:
                 st.error("⚠️ 개인정보 수집에 동의해야 합니다.")
             else:
-                with st.spinner("접수 중입니다..."):
+                with st.spinner("접수 중입니다... 잠시만 기다려주세요."):
                     receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
                     
                     data = {
@@ -211,25 +184,16 @@ def main():
                         'source': 'survey1_final'
                     }
                     
-                    # 실제 구글 시트 저장 호출
+                    # API 호출
                     result = save_to_sheet(data)
                     
                     if result.get('status') == 'success':
                         st.session_state.submitted = True
-                        st.success("✅ 상담 신청이 완료되었습니다!")
-                        st.markdown(f"""
-                        <div style="padding:15px; border-radius:10px; background-color:rgba(0,40,85,0.05); border:1px solid rgba(0,40,85,0.1); margin-bottom:20px; text-align:center;">
-                            <h3 style="margin:0; color:#002855;">접수번호: {receipt_no}</h3>
-                            <p style="margin-top:10px; margin-bottom:0;">담당자가 1영업일 내 검토 후 연락드립니다.</p>
-                        </div>
-                        <div style="text-align:center;">
-                            <a href="{KAKAO_CHANNEL_URL}" target="_blank" style="background:#FEE500; color:#3C1E1E; padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold;">
-                                💬 카카오톡으로 문의하기
-                            </a>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.session_state.receipt_no = receipt_no
+                        # [핵심] 페이지를 강제로 다시 로드하여 위쪽의 'if st.session_state.submitted:' 블록으로 이동시킴
+                        st.rerun()
                     else:
-                        st.error("❌ 서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                        st.error(f"❌ 서버 통신 오류: {result.get('message')}. 잠시 후 다시 시도해주세요.")
 
 if __name__ == "__main__":
     main()
