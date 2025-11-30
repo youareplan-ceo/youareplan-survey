@@ -136,8 +136,33 @@ def generate_full_report(data: Dict[str, Any], ai_result: str = "", mode: str = 
     return report.strip()
 
 # ==============================
-# 5. AI 분석 로직
+# 5. AI 분석 로직 (스마트 감지 적용)
 # ==============================
+def find_best_model(model_list: list) -> str:
+    """사용 가능한 모델 중 가장 적합한 모델 이름을 자동으로 찾습니다."""
+    # 1순위: Gemini 1.5 Flash (빠르고 최신)
+    for m in model_list:
+        if 'gemini' in m.lower() and '1.5' in m.lower() and 'flash' in m.lower():
+            return m
+    
+    # 2순위: Gemini 1.5 Pro
+    for m in model_list:
+        if 'gemini' in m.lower() and '1.5' in m.lower() and 'pro' in m.lower():
+            return m
+            
+    # 3순위: Gemini Pro (1.0)
+    for m in model_list:
+        if 'gemini' in m.lower() and 'pro' in m.lower():
+            return m
+            
+    # 4순위: 아무 Gemini 모델
+    for m in model_list:
+        if 'gemini' in m.lower():
+            return m
+            
+    # 기본값 (목록이 비어있지 않다면 첫번째 것)
+    return model_list[0] if model_list else 'gemini-pro'
+
 def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     if not api_key:
         return "⚠️ API 키가 설정되지 않았습니다."
@@ -145,44 +170,38 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     try:
         genai.configure(api_key=api_key)
         
-        # [수정됨] 사용 가능한 모델을 동적으로 확인하여 선택
-        # 1순위: 1.5-flash (빠르고 저렴), 2순위: 1.5-pro, 3순위: pro (구버전)
+        # 모델 목록 가져오기
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
-        target_model_name = 'gemini-1.5-flash' # 기본값
+        if not available_models:
+            return "⚠️ 사용 가능한 AI 모델을 찾을 수 없습니다. (API 키 권한 확인 필요)"
+
+        # 최적의 모델 자동 선택
+        target_model_name = find_best_model(available_models)
         
-        # 모델 이름 매칭 로직 (models/ 접두사 처리)
-        if 'models/gemini-1.5-flash' in available_models:
-            target_model_name = 'gemini-1.5-flash'
-        elif 'models/gemini-pro' in available_models:
-            target_model_name = 'gemini-pro'
-        elif len(available_models) > 0:
-            # 선호 모델이 없으면 리스트의 첫 번째 모델 사용
-            target_model_name = available_models[0].replace('models/', '')
-        
+        # 모델 초기화
         model = genai.GenerativeModel(target_model_name)
         
         s3 = data.get("stage3")
         
-        # 3차 데이터 유무에 따라 분기 (coach_notes로 판단)
+        # 프롬프트 선택
         if s3 and s3.get('coach_notes'):
             prompt = generate_execution_prompt(data)
-            msg = f"🚀 [{target_model_name}] 1~3차 데이터 기반 [최종 실행 전략] 수립 중..."
+            msg = f"🚀 [{target_model_name.replace('models/', '')}] 최종 실행 전략 수립 중..."
         else:
             prompt = generate_contract_prompt(data)
-            msg = f"🔍 [{target_model_name}] 1,2차 데이터 기반 [계약 가능성] 심사 중..."
+            msg = f"🔍 [{target_model_name.replace('models/', '')}] 계약 가능성 심사 중..."
             
         with st.spinner(msg):
             response = model.generate_content(prompt)
             return response.text
             
     except Exception as e:
-        # 에러 발생 시 상세 정보를 반환하여 디버깅 돕기
         try:
             ver = importlib.metadata.version('google-generativeai')
         except:
             ver = "unknown"
-        return f"⚠️ AI 분석 오류: {str(e)}\n(SDK Version: {ver})"
+        return f"⚠️ AI 분석 오류: {str(e)}\n(SDK: {ver})"
 
 def generate_contract_prompt(data: Dict[str, Any]) -> str:
     """1,2차 기반 계약 심사 프롬프트"""
@@ -416,29 +435,35 @@ def main():
         return
 
     # ==========================================================
-    # 🚨 API 키 및 SDK 버전 진단
+    # 🚨 API 키 및 SDK 버전 진단 (스마트 로직 적용)
     # ==========================================================
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         
-        # 현재 SDK 버전 확인 (이게 중요)
         try:
             sdk_version = importlib.metadata.version('google-generativeai')
         except:
             sdk_version = "unknown"
             
-        # 모델 목록 조회
         model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
-        # UI에 디버그 정보 표시 (성공 시에는 작게)
-        if 'models/gemini-1.5-flash' in model_list or 'models/gemini-pro' in model_list:
-            st.toast(f"✅ AI 연결 성공 (SDK v{sdk_version})")
+        # [수정] 자동으로 최적 모델 찾기
+        best_model = find_best_model(model_list)
+        
+        if best_model:
+            # 성공 메시지
+            st.toast(f"✅ AI 연결 성공: {best_model.replace('models/', '')} (SDK v{sdk_version})")
+            
+            # (디버깅용) 모델 목록 확인 기능
+            with st.expander("🛠️ 감지된 모델 목록 확인 (디버깅)", expanded=False):
+                st.write(f"선택된 모델: **{best_model}**")
+                st.write("전체 모델 리스트:", model_list)
         else:
+            # 실패 시 경고
             st.warning(f"""
             ⚠️ **AI 연결 경고** (SDK v{sdk_version})
-            
-            사용 가능한 모델이 제한적입니다. `requirements.txt`에 `google-generativeai>=0.8.3`이 포함되었는지 확인하세요.
             감지된 모델 수: {len(model_list)}개
+            하지만 'gemini' 관련 모델을 찾을 수 없습니다. API 키 권한을 확인하세요.
             """)
             
     except Exception as e:

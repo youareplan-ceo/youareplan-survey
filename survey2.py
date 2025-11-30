@@ -133,7 +133,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # [수정됨] 제출 완료 시 결과 화면 표시 후 종료
+    # 제출 완료 시 결과 화면
     if st.session_state.submitted_2:
         st.success("✅ 심화 진단이 성공적으로 접수되었습니다.")
         st.balloons()
@@ -181,14 +181,26 @@ def main():
         email = st.text_input("이메일 (선택)", placeholder="email@example.com")
 
         st.markdown('<div class="section-header">사업 및 재무 현황</div>', unsafe_allow_html=True)
+        
+        # [수정] 레이아웃 정렬 개선
         col_date, col_name = st.columns(2)
+        this_year = datetime.now().year
+        
         with col_date:
-            st.markdown('<div style="font-size:14px; margin-bottom:5px;">개업 연월일</div>', unsafe_allow_html=True)
-            d_col1, d_col2, d_col3 = st.columns([1.3, 1, 1])
-            this_year = datetime.now().year
-            s_year = st.selectbox("년", range(this_year, 1989, -1), key="s_year")
-            s_month = st.selectbox("월", range(1, 13), key="s_month")
-            s_day = st.selectbox("일", range(1, 32), key="s_day")
+            # 라벨 높이를 맞추기 위한 스타일 적용
+            st.markdown(
+                """<div style="font-size: 14px; color: rgb(49, 51, 63); margin-bottom: 8px;">개업 연월일</div>""", 
+                unsafe_allow_html=True
+            )
+            d_c1, d_c2, d_c3 = st.columns([1.4, 1, 1])
+            with d_c1:
+                # 라벨을 숨기고 내용에 "년"을 포함하여 깔끔하게 표시
+                s_year = st.selectbox("년", range(this_year, 1989, -1), key="s_year", label_visibility="collapsed", format_func=lambda x: f"{x}년")
+            with d_c2:
+                s_month = st.selectbox("월", range(1, 13), key="s_month", label_visibility="collapsed", format_func=lambda x: f"{x}월")
+            with d_c3:
+                s_day = st.selectbox("일", range(1, 32), key="s_day", label_visibility="collapsed", format_func=lambda x: f"{x}일")
+            
             try:
                 startup_date = datetime(s_year, s_month, s_day).date()
             except ValueError:
@@ -196,7 +208,7 @@ def main():
                 startup_date = datetime(s_year, s_month, last_day).date()
 
         with col_name:
-            company_name = st.text_input("상호명")
+            company_name = st.text_input("상호명", placeholder="(주)유아플랜")
 
         st.markdown("**최근 3년 연매출 (단위: 만원)**")
         c1, c2, c3 = st.columns(3)
@@ -245,7 +257,7 @@ def main():
                     result = save_to_google_sheet(survey_data)
                     if result.get('status') in ['success', 'success_delayed', 'pending']:
                         st.session_state.submitted_2 = True
-                        st.rerun() # [핵심] 성공 시 즉시 리로드
+                        st.rerun() 
                     else:
                         st.error(f"제출 실패: {result.get('message')}")
 
