@@ -7,6 +7,7 @@ import os
 import base64
 import google.generativeai as genai
 import importlib.metadata
+import re # 정규표현식
 
 # ==============================
 # 1. 페이지 설정
@@ -136,32 +137,49 @@ def generate_full_report(data: Dict[str, Any], ai_result: str = "", mode: str = 
     return report.strip()
 
 # ==============================
-# 5. AI 분석 로직 (스마트 감지 적용)
+# 5. AI 분석 로직 (최강 정렬 알고리즘 적용)
 # ==============================
-def find_best_model(model_list: list) -> str:
-    """사용 가능한 모델 중 가장 적합한 모델 이름을 자동으로 찾습니다."""
-    # 1순위: Gemini 1.5 Flash (빠르고 최신)
-    for m in model_list:
-        if 'gemini' in m.lower() and '1.5' in m.lower() and 'flash' in m.lower():
-            return m
+def calculate_model_score(model_name: str) -> float:
+    """
+    모델 이름에서 '버전'과 '날짜'를 추출하여 점수화합니다.
+    점수가 높을수록 최신/상위 모델입니다.
+    """
+    score = 0.0
+    name_lower = model_name.lower()
     
-    # 2순위: Gemini 1.5 Pro
-    for m in model_list:
-        if 'gemini' in m.lower() and '1.5' in m.lower() and 'pro' in m.lower():
-            return m
-            
-    # 3순위: Gemini Pro (1.0)
-    for m in model_list:
-        if 'gemini' in m.lower() and 'pro' in m.lower():
-            return m
-            
-    # 4순위: 아무 Gemini 모델
-    for m in model_list:
-        if 'gemini' in m.lower():
-            return m
-            
-    # 기본값 (목록이 비어있지 않다면 첫번째 것)
-    return model_list[0] if model_list else 'gemini-pro'
+    # 1. 버전 점수 (3.0 > 2.5 > 1.5)
+    version_match = re.search(r'(\d+)\.(\d+)', name_lower)
+    if version_match:
+        major = int(version_match.group(1))
+        minor = int(version_match.group(2))
+        score += (major * 100000) + (minor * 10000)
+    
+    # 2. 날짜 점수 (06-05 > 03-25)
+    date_match = re.search(r'(\d{2})-(\d{2})', name_lower) 
+    if date_match:
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        score += (month * 100) + day
+    elif '001' in name_lower: score += 1
+    elif '002' in name_lower: score += 2
+
+    # 3. 최신 키워드 가산점
+    if 'latest' in name_lower:
+        score += 5000 
+    elif not date_match and 'pro' in name_lower and 'preview' not in name_lower:
+        score += 8000
+        
+    return score
+
+def get_sorted_models(model_list: list) -> list:
+    """모델 리스트를 점수 순으로 정렬하여 반환합니다."""
+    # 텍스트 모델만 필터링
+    candidates = [m for m in model_list if 'image' not in m.lower() and 'vision' not in m.lower()]
+    if not candidates: return []
+
+    # 정렬 (점수 높은 순)
+    candidates.sort(key=calculate_model_score, reverse=True)
+    return candidates
 
 def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     if not api_key:
@@ -170,27 +188,30 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
     try:
         genai.configure(api_key=api_key)
         
-        # 모델 목록 가져오기
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
         if not available_models:
-            return "⚠️ 사용 가능한 AI 모델을 찾을 수 없습니다. (API 키 권한 확인 필요)"
+            return "⚠️ 사용 가능한 AI 모델을 찾을 수 없습니다."
 
-        # 최적의 모델 자동 선택
-        target_model_name = find_best_model(available_models)
+        # [핵심] 점수 순으로 정렬된 리스트 가져오기
+        sorted_models = get_sorted_models(available_models)
+        target_model_name = sorted_models[0] # 1등 선택
         
-        # 모델 초기화
+        # UI에 디버그 정보 저장 (메인 함수에서 표시)
+        st.session_state['debug_sorted_models'] = sorted_models
+
         model = genai.GenerativeModel(target_model_name)
         
         s3 = data.get("stage3")
         
-        # 프롬프트 선택
         if s3 and s3.get('coach_notes'):
             prompt = generate_execution_prompt(data)
-            msg = f"🚀 [{target_model_name.replace('models/', '')}] 최종 실행 전략 수립 중..."
+            display_name = target_model_name.replace('models/', '')
+            msg = f"🧠 [{display_name}] AI가 정밀 분석 중입니다... (5~10초)"
         else:
             prompt = generate_contract_prompt(data)
-            msg = f"🔍 [{target_model_name.replace('models/', '')}] 계약 가능성 심사 중..."
+            display_name = target_model_name.replace('models/', '')
+            msg = f"⚖️ [{display_name}] AI가 심사 중입니다... (5~10초)"
             
         with st.spinner(msg):
             response = model.generate_content(prompt)
@@ -204,116 +225,104 @@ def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
         return f"⚠️ AI 분석 오류: {str(e)}\n(SDK: {ver})"
 
 def generate_contract_prompt(data: Dict[str, Any]) -> str:
-    """1,2차 기반 계약 심사 프롬프트"""
+    """1,2차 기반 계약 심사 프롬프트 (Pro 모델용)"""
     s1 = data.get("stage1") or {}
     s2 = data.get("stage2") or {}
     metrics = calculate_financial_metrics(s2)
     
     return f"""
-당신은 정책자금 컨설팅펌의 수석 심사역입니다.
-1차(기본), 2차(재무) 설문을 마친 예비 고객 데이터를 분석하여 계약 여부를 판단합니다.
+당신은 대한민국 최고의 정책자금 전문 컨설팅펌의 수석 심사역입니다.
+제공된 기업 데이터를 바탕으로 매우 논리적이고 비판적인 시각에서 계약 여부를 판단하십시오.
+단순한 데이터 나열이 아닌, 데이터 간의 인과관계를 분석해야 합니다.
 
 # [기업 데이터]
 - 고객명: {s1.get('name', '-')}
-- 업종: {s1.get('industry', '-')}
+- 업종: {s1.get('industry', '-')} (업종별 정책자금 가점/감점 요인 고려 필요)
 - 지역: {s1.get('region', '-')}
 - 사업형태: {s1.get('business_type', '-')}
-- 직원수: {s1.get('employee_count', '-')}
+- 직원수: {s1.get('employee_count', '-')} (고용 창출 관련 자금 가능성 체크)
 - 필요자금: {s1.get('funding_amount', '-')}
 - 정책자금 경험: {s1.get('policy_experience', '-')}
 
 # [재무 현황]
 - 사업자명: {s2.get('business_name', '-')}
-- 사업시작일: {s2.get('startup_date', '-')}
-- 올해 매출: {s2.get('revenue_y1', '0')}만원
-- 전년 매출: {s2.get('revenue_y2', '0')}만원
+- 업력: {s2.get('startup_date', '-')} (창업초기/도약기/성장기 구분 필수)
+- 최근 매출: {s2.get('revenue_y1', '0')}만원
+- 전년 매출: {s2.get('revenue_y2', '0')}만원 (성장 추세 분석)
 - 자본금: {s2.get('capital_amount', '0')}만원
 - 부채: {s2.get('debt_amount', '0')}만원
-- 부채비율: {metrics['debt_ratio']}
+- 부채비율: {metrics['debt_ratio']} (400% 초과 시 반려 사유가 될 수 있음)
 - 매출성장률: {metrics['growth_rate']}
 
 # [리스크 현황]
-- 세금 체납: {s1.get('tax_status', '-')}
+- 세금 체납: {s1.get('tax_status', '-')} (체납 존재 시 즉시 부결 사유)
 - 금융 연체: {s1.get('credit_status', '-')}
 - 영업 상태: {s1.get('business_status', '-')}
 
-# [요청 사항 - Markdown 형식으로 출력]
+# [요청 사항 - 전문적인 Markdown 리포트 작성]
 
-## 1. 수임 판정 (Go / No-Go)
-- **결과:** [적극 추천 / 조건부 진행 / 수임 거절] 중 택 1
-- **판단 근거:** 승인 확률이 50% 이상인지 냉정하게 평가
+## 1. 종합 수임 판정 (심사 결과)
+- **판정:** [강력 추천 / 진행 가능 / 조건부 진행 / 수임 불가] 중 하나 선택
+- **핵심 근거:** 재무적 안정성, 성장성, 정책 부합성을 종합하여 3줄 이내 요약
 
-## 2. 예상 가능 정책자금 (2~3개)
-- 기관명, 자금명, 예상 한도, 금리 범위
-- 예: 소상공인시장진흥공단 - 일반경영안정자금 - 최대 7천만원 - 연 3~4%
+## 2. 맞춤형 정책자금 매칭 전략
+- 이 기업의 업력과 업종에 딱 맞는 자금 2~3개를 구체적으로 제시
+- (예: 중진공 청년전용, 소진공 성장촉진, 신보 스타트업 등)
+- 각 자금별 예상 한도 및 승인 확률 예측
 
-## 3. 계약 유도 포인트 (Sales Point)
-- 고객이 착수금을 내고 계약하게 만들 설득 논리 3가지
+## 3. 컨설팅 세일즈 포인트 (Hooking)
+- 고객을 설득하기 위해 강조해야 할 우리 기업의 강점 (예: 매출 성장률 우수, 고용 증가 등)
+- 반대로, 고객이 스스로 해결하기 어려운 약점(Pain Point) 지적
 
-## 4. 주의사항 / 보완 필요 항목
-- 계약 전 확인해야 할 사항
+## 4. 사전 점검 및 리스크 헤징
+- 심사 과정에서 문제될 소지가 있는 항목과 그에 대한 방어 논리(Defense Logic) 수립
 """.strip()
 
 def generate_execution_prompt(data: Dict[str, Any]) -> str:
-    """1,2,3차 기반 최종 실행 전략 프롬프트"""
+    """1,2,3차 기반 최종 실행 전략 프롬프트 (Pro 모델용)"""
     s1 = data.get("stage1") or {}
     s2 = data.get("stage2") or {}
     s3 = data.get("stage3") or {}
     metrics = calculate_financial_metrics(s2)
     
     return f"""
-당신은 정책자금 실행 컨설턴트입니다.
-계약 완료된 고객의 1~3차 데이터를 바탕으로 최종 실행 전략을 수립합니다.
+당신은 정책자금 실행을 전담하는 수석 컨설턴트입니다.
+단순한 정보 전달이 아니라, '자금을 실제로 받아내기 위한' 구체적이고 실현 가능한 전략을 수립하십시오.
 
-# [기본 정보 - 1차]
-- 고객명: {s1.get('name', '-')}
-- 업종: {s1.get('industry', '-')}
-- 지역: {s1.get('region', '-')}
-- 사업형태: {s1.get('business_type', '-')}
-- 필요자금: {s1.get('funding_amount', '-')}
+# [기업 프로파일]
+- 기업명: {s2.get('business_name', '-')} ({s1.get('industry', '-')})
+- 업력/규모: {s2.get('startup_date', '-')} 설립 / 매출 {s2.get('revenue_y1', '0')}만원
+- 재무상태: 부채비율 {metrics['debt_ratio']}, 성장률 {metrics['growth_rate']}
 
-# [재무 현황 - 2차]
-- 사업자명: {s2.get('business_name', '-')}
-- 사업시작일: {s2.get('startup_date', '-')}
-- 올해 매출: {s2.get('revenue_y1', '0')}만원
-- 자본금: {s2.get('capital_amount', '0')}만원
-- 부채: {s2.get('debt_amount', '0')}만원
-- 부채비율: {metrics['debt_ratio']}
-- 성장률: {metrics['growth_rate']}
-
-# [심층 분석 - 3차]
-- 담보/보증 계획: {s3.get('collateral_profile', '-')}
-- 세무/신용 상태: {s3.get('tax_credit_summary', '-')}
-- 기존 대출 현황: {s3.get('loan_summary', '-')}
-- 준비된 서류: {s3.get('docs_check', '-')}
-- 우대/제외 요건: {s3.get('priority_exclusion', '-')}
-- 리스크 Top3: {s3.get('risk_top3', '-')}
+# [심층 분석 데이터 (3차)]
+- 담보/보증 여력: {s3.get('collateral_profile', '-')}
+- 신용/세무 이슈: {s3.get('tax_credit_summary', '-')}
+- 기대출 현황: {s3.get('loan_summary', '-')} (대환 필요성 검토)
+- 준비 서류: {s3.get('docs_check', '-')}
+- 가점/감점 요인: {s3.get('priority_exclusion', '-')}
+- 핵심 리스크: {s3.get('risk_top3', '-')}
 - 컨설턴트 메모: {s3.get('coach_notes', '-')}
 
-# [요청 사항 - Markdown 형식으로 출력]
+# [전략 리포트 작성 가이드]
 
-## 1. 최종 승인 가능성 평가
-- 담보/기대출 고려하여 승인 확률 재평가 (상/중/하)
-- 핵심 리스크와 대응 방안
+## 1. 승인 가능성 정밀 진단
+- **승인 확률:** (상 / 중 / 하)
+- **진단:** 재무제표와 비재무적 요소(기술력, 인증 등)를 결합한 종합 평가
 
-## 2. 최적 정책자금 매칭 (우선순위 순)
-각 자금별로:
-- 기관명 / 자금명
-- 예상 한도 / 금리
-- 신청 적기 / 소요 기간
-- 이 고객에게 유리한 점
+## 2. 최적 자금 조달 로드맵 (Step-by-Step)
+- **1순위 공략 기관/자금:** (가장 확률 높고 조건 좋은 곳)
+- **2순위 대안(Plan B):** (1순위 부결 시 대안)
+- **신청 적기:** (자금 소진 현황 및 기업 결산 시기 고려)
 
-## 3. 즉시 준비해야 할 서류 목록
-- 필수 서류 (체크리스트 형태)
-- 추가 가점 서류
+## 3. 핵심 보완 솔루션 (Solution)
+- 현재 기업 상황에서 승인율을 높이기 위해 당장 실행해야 할 액션
+- (예: 부채비율 조정을 위한 가수금 증자, 기업부설연구소 설립 등 구체적 조언)
 
-## 4. 실행 로드맵 (주 단위)
-- 1주차: OOO
-- 2주차: OOO
-- ...
+## 4. 예상 질문 및 답변 (Q&A)
+- 현장 실사 시 평가위원이 공격할 만한 약점 질문 2가지와 모범 답변
 
-## 5. 컨설턴트 액션 아이템
-- 당장 해야 할 일 3가지
+## 5. 실행 타임라인
+- 준비부터 신청, 평가, 실행까지의 주차별 계획
 """.strip()
 
 # ==============================
@@ -435,7 +444,7 @@ def main():
         return
 
     # ==========================================================
-    # 🚨 API 키 및 SDK 버전 진단 (스마트 로직 적용)
+    # 🚨 API 키 및 SDK 버전 진단 (점수 기반 스마트 로직)
     # ==========================================================
     try:
         genai.configure(api_key=GEMINI_API_KEY)
@@ -447,19 +456,31 @@ def main():
             
         model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
-        # [수정] 자동으로 최적 모델 찾기
-        best_model = find_best_model(model_list)
+        # [수정] 점수(버전+날짜)가 가장 높은 모델 선택
+        sorted_models = get_sorted_models(model_list)
         
-        if best_model:
-            # 성공 메시지
-            st.toast(f"✅ AI 연결 성공: {best_model.replace('models/', '')} (SDK v{sdk_version})")
+        if sorted_models:
+            best_model = sorted_models[0]
+            display_model = best_model.replace('models/', '')
+            score = calculate_model_score(best_model)
             
-            # (디버깅용) 모델 목록 확인 기능
-            with st.expander("🛠️ 감지된 모델 목록 확인 (디버깅)", expanded=False):
-                st.write(f"선택된 모델: **{best_model}**")
-                st.write("전체 모델 리스트:", model_list)
+            # 성공 메시지
+            st.toast(f"✅ AI 연결 성공: {display_model}")
+            
+            # [디버깅] 점수별로 정렬된 순위표 보여주기
+            with st.expander("🏆 AI 모델 성능 순위 (최신순 정렬)", expanded=False):
+                st.write(f"**현재 선택된 1등 모델:** `{best_model}`")
+                
+                # 순위표 만들기
+                rank_data = []
+                for idx, m in enumerate(sorted_models[:10]): # 상위 10개만
+                    rank_data.append({
+                        "순위": f"{idx+1}위",
+                        "모델명": m.replace('models/', ''),
+                        "점수": calculate_model_score(m)
+                    })
+                st.table(rank_data)
         else:
-            # 실패 시 경고
             st.warning(f"""
             ⚠️ **AI 연결 경고** (SDK v{sdk_version})
             감지된 모델 수: {len(model_list)}개
