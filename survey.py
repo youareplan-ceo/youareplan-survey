@@ -5,9 +5,6 @@ from datetime import datetime
 import random
 import os
 
-# ==============================
-# 페이지 설정
-# ==============================
 st.set_page_config(
     page_title="유아플랜 정책자금 1차 상담",
     page_icon="📝",
@@ -15,9 +12,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ==============================
-# 환경 설정
-# ==============================
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 RELEASE_VERSION = "v2025-11-27-stable"
@@ -25,9 +19,6 @@ APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 KAKAO_CHANNEL_URL = "https://pf.kakao.com/_LWxexmn"
 
-# ==============================
-# 유틸리티 함수
-# ==============================
 def _digits_only(s: str) -> str:
     return re.sub(r"[^0-9]", "", s or "")
 
@@ -39,15 +30,11 @@ def format_phone(d: str) -> str:
 def save_to_sheet(data: dict) -> dict:
     try:
         data['token'] = API_TOKEN
-        # 타임아웃을 20초로 약간 늘려 안정성 확보
         resp = requests.post(APPS_SCRIPT_URL, json=data, timeout=20)
         return resp.json() if resp.status_code == 200 else {"status": "error", "message": f"HTTP {resp.status_code}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# ==============================
-# 옵션 데이터
-# ==============================
 REGIONS = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"]
 INDUSTRIES = ["제조업", "건설업", "도소매업", "숙박·음식점업", "운수·창고업", "정보통신업", "전문·과학·기술 서비스업", "교육서비스업", "보건·사회복지업", "기타"]
 BUSINESS_TYPES = ["예비창업자", "개인사업자", "법인사업자", "협동조합·사회적기업"]
@@ -55,9 +42,6 @@ EMPLOYEE_COUNTS = ["0명(대표만)", "1명", "2-4명", "5-9명", "10명 이상"
 REVENUES = ["매출 없음", "5천만원 미만", "5천만원~1억원", "1억원~3억원", "3억원~5억원", "5억원 이상"]
 FUNDING_AMOUNTS = ["3천만원 미만", "3천만원~1억원", "1-3억원", "3-5억원", "5억원 이상"]
 
-# ==============================
-# CSS 스타일
-# ==============================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -72,14 +56,10 @@ div[data-testid="stFormSubmitButton"] button { background: #002855 !important; c
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================
-# 메인 함수
-# ==============================
 def main():
     if 'submitted' not in st.session_state:
         st.session_state.submitted = False
     
-    # [수정됨] 헤더는 항상 표시
     st.markdown(f"""
     <div class="unified-header">
         <img src="{LOGO_URL}" alt="{BRAND_NAME}">
@@ -87,7 +67,18 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # [핵심 수정] 제출 완료 상태면 결과 화면만 보여주고 함수 종료 (폼 렌더링 X)
+    # [중요] URL 파라미터 받기 (대시보드에서 보낸 정보)
+    try:
+        qp = st.query_params
+        pre_receipt = qp.get("r", None)
+        pre_name = qp.get("name", "")
+        pre_phone = qp.get("phone", "")
+    except:
+        pre_receipt, pre_name, pre_phone = None, "", ""
+
+    if pre_receipt:
+        st.info(f"💡 기존 고객(접수번호: {pre_receipt}) 정보를 연동하여 작성합니다.")
+
     if st.session_state.submitted:
         receipt_no = st.session_state.get('receipt_no', '알 수 없음')
         
@@ -97,26 +88,18 @@ def main():
             <h3 style="margin:0; color:#002855; font-size: 24px;">접수번호: {receipt_no}</h3>
             <p style="margin-top:10px; margin-bottom:0; color: #555;">담당자가 1영업일 내 검토 후 연락드립니다.</p>
         </div>
-        <div style="text-align:center; margin-top: 20px;">
-            <a href="{KAKAO_CHANNEL_URL}" target="_blank" style="display:inline-block; background:#FEE500; color:#3C1E1E; padding:15px 30px; border-radius:8px; text-decoration:none; font-weight:bold; font-size: 16px;">
-                💬 카카오톡으로 문의하기
-            </a>
-        </div>
-        <div style="text-align:center; margin-top: 30px;">
-            <button onclick="window.location.reload()" style="background:none; border:none; color:#888; text-decoration:underline; cursor:pointer;">새로운 상담 신청하기</button>
-        </div>
         """, unsafe_allow_html=True)
-        return  # 여기서 함수를 종료하여 폼이 다시 그려지지 않게 함
+        return
 
-    # --- 입력 폼 (제출 전일 때만 실행) ---
     st.markdown("### 📋 1차 기초 상담 신청")
     st.caption("우리 기업의 정책자금 지원 가능성을 검토하기 위한 기초 단계입니다.")
 
     with st.form("survey_form"):
         st.markdown('<div class="section-header">👤 기본 정보</div>', unsafe_allow_html=True)
         
-        name = st.text_input("대표자 성함", placeholder="예: 홍길동")
-        phone_raw = st.text_input("연락처", placeholder="숫자만 입력 (예: 01012345678)")
+        # 이름, 연락처가 있으면 자동 입력
+        name = st.text_input("대표자 성함", value=pre_name, placeholder="예: 홍길동")
+        phone_raw = st.text_input("연락처", value=pre_phone, placeholder="숫자만 입력 (예: 01012345678)")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -144,7 +127,7 @@ def main():
         
         col_p, col_m = st.columns(2)
         with col_p:
-            privacy = st.checkbox("개인정보 수집·이용 동의 (필수)")
+            privacy = st.checkbox("개인정보 수집·이용 동의 (필수)", value=True)
         with col_m:
             marketing = st.checkbox("마케팅 수신 동의 (선택)")
 
@@ -162,7 +145,11 @@ def main():
                 st.error("⚠️ 개인정보 수집에 동의해야 합니다.")
             else:
                 with st.spinner("접수 중입니다... 잠시만 기다려주세요."):
-                    receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
+                    # [중요] 기존 접수번호가 있으면 그걸 쓰고, 없으면 새로 생성
+                    if pre_receipt:
+                        receipt_no = pre_receipt
+                    else:
+                        receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
                     
                     data = {
                         'name': name.strip(),
@@ -181,16 +168,14 @@ def main():
                         'marketing_agree': marketing,
                         'receipt_no': receipt_no,
                         'release_version': RELEASE_VERSION,
-                        'source': 'survey1_final'
+                        'source': 'survey1_linked' if pre_receipt else 'survey1_new'
                     }
                     
-                    # API 호출
                     result = save_to_sheet(data)
                     
                     if result.get('status') == 'success':
                         st.session_state.submitted = True
                         st.session_state.receipt_no = receipt_no
-                        # [핵심] 페이지를 강제로 다시 로드하여 위쪽의 'if st.session_state.submitted:' 블록으로 이동시킴
                         st.rerun()
                     else:
                         st.error(f"❌ 서버 통신 오류: {result.get('message')}. 잠시 후 다시 시도해주세요.")

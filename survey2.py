@@ -9,9 +9,6 @@ import calendar
 from uuid import uuid4
 from typing import Optional
 
-# ==============================
-# 페이지 설정
-# ==============================
 st.set_page_config(
     page_title="유아플랜 정책자금 2차 심화진단",
     page_icon="📊",
@@ -19,9 +16,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ==============================
-# 환경 설정
-# ==============================
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
 RELEASE_VERSION = "v2025-11-27-stable"
@@ -34,9 +28,6 @@ class _Config:
 config = _Config()
 KAKAO_CHANNEL_URL = "https://pf.kakao.com/_LWxexmn"
 
-# ==============================
-# 네트워크 로직
-# ==============================
 def _normalize_gas_url(u: str) -> str:
     try:
         s = str(u or "").strip()
@@ -98,9 +89,6 @@ def save_to_google_sheet(data, timeout_sec: int = 45):
     if ok: return resp_data or {"status": "success"}
     return {"status": "error", "message": err}
 
-# ==============================
-# 유틸리티 & CSS
-# ==============================
 def _digits_only(s: str) -> str: return re.sub(r"[^0-9]", "", s or "")
 def format_phone(d: str) -> str: return f"{d[0:3]}-{d[3:7]}-{d[7:11]}" if len(d)==11 else d
 def format_biz_no(d: str) -> str: return f"{d[0:3]}-{d[3:5]}-{d[5:10]}" if len(d)==10 else d
@@ -119,9 +107,6 @@ div[data-testid="stFormSubmitButton"] button { background: #002855 !important; c
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================
-# 메인 함수
-# ==============================
 def main():
     if "submitted_2" not in st.session_state:
         st.session_state.submitted_2 = False
@@ -133,7 +118,6 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 제출 완료 시 결과 화면
     if st.session_state.submitted_2:
         st.success("✅ 심화 진단이 성공적으로 접수되었습니다.")
         st.balloons()
@@ -149,27 +133,33 @@ def main():
         """, unsafe_allow_html=True)
         return
 
-    # 토큰 검증
+    # [중요] URL 파라미터로 1차 접수번호 받기
     try:
         qp = st.query_params
         magic_token = qp.get("t")
         uuid_hint = qp.get("u")
+        pre_receipt_no = qp.get("r") # 대시보드에서 넘어온 번호
     except:
-        magic_token, uuid_hint = None, None
+        magic_token, uuid_hint, pre_receipt_no = None, None, None
 
-    if not magic_token:
-        # 테스트 모드 (배포 시 주석 해제)
-        # st.error("⚠️ 잘못된 접근입니다.")
-        # return
-        v_result = {"parent_receipt_no": "TEST-MODE", "phone_mask": "010-****-0000"}
-    else:
+    parent_rid = ""
+    
+    # 관리자 모드 (접수번호가 직접 넘어온 경우)
+    if pre_receipt_no:
+        parent_rid = pre_receipt_no
+        st.info(f"⚡ [직원/관리자 모드] 1차 접수번호({parent_rid})가 자동 연결되었습니다.")
+    # 고객 모드 (토큰으로 접속한 경우)
+    elif magic_token:
         v_result = validate_access_token(magic_token, uuid_hint)
         if not v_result.get("ok"):
             st.error(f"접속이 만료되었거나 유효하지 않습니다: {v_result.get('message')}")
             return
-    
-    parent_rid = v_result.get("parent_receipt_no", "")
-    st.caption(f"✅ 인증됨 (1차 접수번호: {parent_rid})")
+        parent_rid = v_result.get("parent_receipt_no", "")
+        st.caption(f"✅ 인증됨 (1차 접수번호: {parent_rid})")
+    # 아무것도 없는 경우 (테스트)
+    else:
+        # st.error("잘못된 접근입니다.") # 배포 시 주석 해제
+        parent_rid = "TEST-MODE"
 
     # 폼 영역
     with st.form("survey2_form"):
@@ -181,20 +171,13 @@ def main():
         email = st.text_input("이메일 (선택)", placeholder="email@example.com")
 
         st.markdown('<div class="section-header">사업 및 재무 현황</div>', unsafe_allow_html=True)
-        
-        # [수정] 레이아웃 정렬 개선
         col_date, col_name = st.columns(2)
         this_year = datetime.now().year
         
         with col_date:
-            # 라벨 높이를 맞추기 위한 스타일 적용
-            st.markdown(
-                """<div style="font-size: 14px; color: rgb(49, 51, 63); margin-bottom: 8px;">개업 연월일</div>""", 
-                unsafe_allow_html=True
-            )
+            st.markdown("""<div style="font-size: 14px; color: rgb(49, 51, 63); margin-bottom: 8px;">개업 연월일</div>""", unsafe_allow_html=True)
             d_c1, d_c2, d_c3 = st.columns([1.4, 1, 1])
             with d_c1:
-                # 라벨을 숨기고 내용에 "년"을 포함하여 깔끔하게 표시
                 s_year = st.selectbox("년", range(this_year, 1989, -1), key="s_year", label_visibility="collapsed", format_func=lambda x: f"{x}년")
             with d_c2:
                 s_month = st.selectbox("월", range(1, 13), key="s_month", label_visibility="collapsed", format_func=lambda x: f"{x}월")
