@@ -280,6 +280,14 @@ PROCESS_STATUS = ["1.신규접수", "2.상담예정", "3.서류준비중", "4.�
 def main():
     if not check_password(): st.stop()
 
+    # ✅ session_state 초기화
+    if "search_result" not in st.session_state:
+        st.session_state.search_result = None
+    if "search_query" not in st.session_state:
+        st.session_state.search_query = ""
+    if "issue_result" not in st.session_state:
+        st.session_state.issue_result = None
+
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -305,23 +313,33 @@ def main():
     st.markdown(f"""
     <div class="unified-header">
         <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
-        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-ai-learning</div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-session-fix</div>
     </div>
     """, unsafe_allow_html=True)
 
     col1, col2 = st.columns([4, 1])
-    with col1: search_query = st.text_input("접수번호 입력", placeholder="예: YP2025...", label_visibility="collapsed")
-    with col2: search_btn = st.button("🔍 조회", type="primary", use_container_width=True)
+    with col1: 
+        search_query = st.text_input("접수번호 입력", value=st.session_state.search_query, placeholder="예: YP2025...", label_visibility="collapsed")
+    with col2: 
+        search_btn = st.button("🔍 조회", type="primary", use_container_width=True)
 
+    # ✅ 조회 버튼 클릭 시 결과를 session_state에 저장
     if search_btn and search_query:
+        st.session_state.search_query = search_query.strip()
+        st.session_state.issue_result = None  # 이전 발급 결과 초기화
         with st.spinner("조회 중..."):
             result = fetch_integrated_data(search_query.strip())
+        st.session_state.search_result = result
+
+    # ✅ session_state에 저장된 결과가 있으면 표시
+    if st.session_state.search_result:
+        result = st.session_state.search_result
         
         if result.get("status") == "success":
             data = result.get("data", {})
             s1, s2, s3 = data.get("stage1") or {}, data.get("stage2") or {}, data.get("stage3") or {}
             metrics = calculate_financial_metrics(s2)
-            real_receipt_no = data.get('receipt_no') or search_query
+            real_receipt_no = data.get('receipt_no') or st.session_state.search_query
             current_notes = s3.get('coach_notes', '') if s3 else ""
             
             current_status = "1.신규접수"
@@ -343,7 +361,9 @@ def main():
                         if new_status != current_status:
                             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
                             res = update_consultant_note(real_receipt_no, f"[{ts} | SYSTEM] [STATUS_CHANGE] {current_status} → {new_status}", current_notes)
-                            if res: st.rerun()
+                            if res: 
+                                st.session_state.search_result = None  # 갱신을 위해 초기화
+                                st.rerun()
 
             st.markdown(f"### 📊 {s1.get('name', '고객')} 님 (ID: {real_receipt_no})")
             
@@ -355,16 +375,26 @@ def main():
                     st.markdown("---")
                     st.markdown("**📨 2차 링크 발급**")
                     col_h, col_i = st.columns([2, 1])
-                    with col_h: hours = st.selectbox("유효시간", [6, 12, 24], index=2, format_func=lambda x: f"{x}시간", key=f"h_{real_receipt_no}")
-                    with col_i: issue_btn = st.button("🔗 발급", type="primary", use_container_width=True, key=f"i_{real_receipt_no}")
+                    with col_h: 
+                        hours = st.selectbox("유효시간", [6, 12, 24], index=2, format_func=lambda x: f"{x}시간", key=f"h_{real_receipt_no}")
+                    with col_i: 
+                        issue_btn = st.button("🔗 발급", type="primary", use_container_width=True, key=f"i_{real_receipt_no}")
+                    
+                    # ✅ 발급 버튼 클릭 처리
                     if issue_btn:
                         with st.spinner("발급 중..."):
                             r = issue_second_survey_token(real_receipt_no, hours, "dashboard")
+                        st.session_state.issue_result = r
+                    
+                    # ✅ 발급 결과 표시 (session_state에서)
+                    if st.session_state.issue_result:
+                        r = st.session_state.issue_result
                         if r.get("ok"):
                             st.success("✅ 발급 완료!")
                             st.markdown(f'<div class="link-box"><strong>📋 고객용 링크</strong><code>{r.get("link","")}</code><small>만료: {r.get("expires_at","-")}</small></div>', unsafe_allow_html=True)
                             st.code(r.get("link", ""))
-                        else: st.error(f"❌ 실패: {r.get('error')}")
+                        else: 
+                            st.error(f"❌ 실패: {r.get('error')}")
 
             with col_ceo:
                 with st.expander("👑 [대표용] 계약/3차", expanded=True):
@@ -374,11 +404,13 @@ def main():
                         new_link = st.text_input("URL")
                         if st.button("저장") and new_link:
                             update_consultant_note(real_receipt_no, f"[CONTRACT_LINK] {new_link}", current_notes)
+                            st.session_state.search_result = None
                             st.rerun()
                     if st.checkbox("✅ 계약 완료", value=is_contracted):
                         st.link_button("🚀 3차 상담", f"{SURVEY3_URL}/?r={real_receipt_no}", use_container_width=True)
                         if not is_contracted and st.button("저장"):
                             update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | SYSTEM] ✅ [계약완료]", current_notes)
+                            st.session_state.search_result = None
                             st.rerun()
 
             # 지표
@@ -414,6 +446,7 @@ def main():
                 with ci: n = st.text_input("내용", key="n")
                 if st.button("등록") and n:
                     update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | {w}] {n}", current_notes)
+                    st.session_state.search_result = None
                     st.rerun()
 
             # AI 분석
@@ -472,8 +505,6 @@ def main():
                         else: st.warning("정책자금명과 금액을 입력하세요.")
         else:
             st.error(f"❌ 조회 실패: {result.get('message')}")
-    elif search_btn:
-        st.warning("접수번호를 입력하세요.")
 
 if __name__ == "__main__":
     main()

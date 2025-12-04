@@ -258,66 +258,77 @@ def main():
             st.session_state.submitted_phone = ''
             st.rerun()
 
-    # [화면 2] 입력 폼 (기본 화면)
-    else:
-        with st.form("quick_form"):
-            st.markdown("### 📋 간편 상담 신청")
-            st.caption("30초면 신청이 완료됩니다.")
-            
-            name = st.text_input("대표자 성함", placeholder="예: 홍길동")
-            phone_raw = st.text_input("연락처", placeholder="예: 01012345678")
-            business_type = st.selectbox("사업자 형태", ["선택해주세요", "예비창업자", "개인사업자", "법인사업자"])
-            funding_amount = st.selectbox("필요 자금 규모", ["선택해주세요", "3천만원 미만", "3천만원~1억원", "1억원~3억원", "3억원 이상"])
-            
-            st.markdown("---")
-            col_p, col_m = st.columns(2)
-            with col_p: privacy = st.checkbox("개인정보 수집 동의 (필수)", value=True)
-            with col_m: marketing = st.checkbox("마케팅 수신 동의 (선택)", value=True)
-            
-            st.write("") 
-            submitted = st.form_submit_button("📩 무료 상담 신청하기")
-            
-            if submitted:
-                phone_digits = _digits_only(phone_raw)
-                
-                if not name: st.warning("⚠️ 성함을 입력해주세요.")
-                elif len(phone_digits) < 10: st.warning("⚠️ 연락처를 올바르게 입력해주세요.")
-                elif business_type == "선택해주세요": st.warning("⚠️ 사업자 형태를 선택해주세요.")
-                elif not privacy: st.error("⚠️ 개인정보 수집에 동의해야 합니다.")
-                else:
-                    with st.spinner("접수 중입니다..."):
-                        formatted_phone = format_phone(phone_digits)
-                        receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
-                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        # UTM 파라미터 가져오기
-                        utm = st.session_state.utm_params
-                        
-                        data = {
-                            'name': name,
-                            'phone': formatted_phone,
-                            'business_type': business_type,
-                            'funding_amount': funding_amount,
-                            'receipt_no': receipt_no,
-                            'timestamp': timestamp,
-                            'source': 'landing_page_mobile',
-                            # UTM 파라미터 추가
-                            'utm_source': utm['utm_source'],
-                            'utm_campaign': utm['utm_campaign'],
-                            'utm_content': utm['utm_content'],
-                            'utm_medium': utm['utm_medium'],
-                            'utm_term': utm['utm_term']
-                        }
-                        
-                        save_to_sheet(data)
-                        
-                        st.session_state.form_submitted = True
-                        st.session_state.last_receipt_no = receipt_no
-                        st.session_state.submitted_phone = phone_digits
-                        st.session_state.lead_pixel_fired = False 
-                        st.rerun()
+        # 푸터 (완료 화면)
+        st.markdown("""
+        <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 11px;">
+            <strong>유아플랜</strong><br>
+            중소벤처기업부 · 소상공인시장진흥공단 협력 민간 상담 서비스<br>
+            모든 정보는 암호화되어 안전하게 처리됩니다.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 완료 화면에서 실행 종료 (폼 중복 렌더링 방지)
+        st.stop()
 
-    # 푸터
+    # [화면 2] 입력 폼 (기본 화면)
+    with st.form("quick_form"):
+        st.markdown("### 📋 간편 상담 신청")
+        st.caption("30초면 신청이 완료됩니다.")
+        
+        name = st.text_input("대표자 성함", placeholder="예: 홍길동")
+        phone_raw = st.text_input("연락처", placeholder="예: 01012345678")
+        business_type = st.selectbox("사업자 형태", ["선택해주세요", "예비창업자", "개인사업자", "법인사업자"])
+        funding_amount = st.selectbox("필요 자금 규모", ["선택해주세요", "3천만원 미만", "3천만원~1억원", "1억원~3억원", "3억원 이상"])
+        
+        st.markdown("---")
+        col_p, col_m = st.columns(2)
+        with col_p: privacy = st.checkbox("개인정보 수집 동의 (필수)", value=True)
+        with col_m: marketing = st.checkbox("마케팅 수신 동의 (선택)", value=True)
+        
+        st.write("") 
+        submitted = st.form_submit_button("📩 무료 상담 신청하기")
+        
+        if submitted:
+            phone_digits = _digits_only(phone_raw)
+            
+            if not name: st.warning("⚠️ 성함을 입력해주세요.")
+            elif len(phone_digits) < 10: st.warning("⚠️ 연락처를 올바르게 입력해주세요.")
+            elif business_type == "선택해주세요": st.warning("⚠️ 사업자 형태를 선택해주세요.")
+            elif not privacy: st.error("⚠️ 개인정보 수집에 동의해야 합니다.")
+            else:
+                with st.spinner("접수 중입니다..."):
+                    formatted_phone = format_phone(phone_digits)
+                    receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # UTM 파라미터 가져오기
+                    utm = st.session_state.utm_params
+                    
+                    data = {
+                        'name': name,
+                        'phone': formatted_phone,
+                        'business_type': business_type,
+                        'funding_amount': funding_amount,
+                        'receipt_no': receipt_no,
+                        'timestamp': timestamp,
+                        'source': 'landing_page_mobile',
+                        # UTM 파라미터 추가
+                        'utm_source': utm['utm_source'],
+                        'utm_campaign': utm['utm_campaign'],
+                        'utm_content': utm['utm_content'],
+                        'utm_medium': utm['utm_medium'],
+                        'utm_term': utm['utm_term']
+                    }
+                    
+                    save_to_sheet(data)
+                    
+                    st.session_state.form_submitted = True
+                    st.session_state.last_receipt_no = receipt_no
+                    st.session_state.submitted_phone = phone_digits
+                    st.session_state.lead_pixel_fired = False 
+                    st.rerun()
+
+    # 푸터 (폼 화면)
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 11px;">
         <strong>유아플랜</strong><br>
