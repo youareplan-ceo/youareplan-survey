@@ -145,31 +145,26 @@ def update_consultant_note(receipt_no: str, new_note: str, current_notes: str) -
         return {"status": "error", "message": str(e)}
 
 # ==============================
-# 5. Gemini AI 모델 평가 및 분석 (2.5 Pro 우선 로직)
+# 5. Gemini AI 모델 평가 및 분석
 # ==============================
 def calc_model_score(name: str) -> int:
-    """
-    모델명 점수 계산 로직
-    - 원칙: 최신 버전(Major.Minor) > Pro > Flash
-    - 예시: gemini-2.5-pro > gemini-2.5-flash > gemini-2.0-pro > gemini-1.5-pro
-    """
+    """모델명 점수 계산 로직 (2.5 Pro 우선)"""
     name_lower = name.lower()
     score = 0
     
-    # 1. 버전 파싱 (gemini-X.Y)
+    # 1. 버전 파싱
     ver_match = re.search(r'gemini-(\d+)\.(\d+)', name_lower)
     if ver_match:
         major = int(ver_match.group(1))
         minor = int(ver_match.group(2))
-        # 버전 점수: 2.5 -> 25000, 2.0 -> 20000, 1.5 -> 15000
         score += (major * 10000) + (minor * 1000)
     
-    # 2. 성능 티어 (Pro 우선)
-    if 'ultra' in name_lower: score += 1000  # 혹시 모를 Ultra 대비
+    # 2. 성능 티어
+    if 'ultra' in name_lower: score += 1000
     elif 'pro' in name_lower: score += 500
     elif 'flash' in name_lower: score += 400
     
-    # 3. 최신 날짜 가점 (동일 버전 내 최신 모델)
+    # 3. 최신 날짜 가점
     date_match = re.search(r'(\d{2})-?(\d{2})(?!\d)', name_lower)
     if date_match:
         month = int(date_match.group(1))
@@ -181,7 +176,6 @@ def calc_model_score(name: str) -> int:
     if 'latest' in name_lower: score += 50
     
     # 5. Experimental 처리
-    # 2.5 같은 최신 모델은 exp로 나올 수 있으므로 감점하지 않고 오히려 소폭 가점
     if 'exp' in name_lower: score += 10 
     
     return score
@@ -207,7 +201,6 @@ def evaluate_models(api_key: str) -> List[Dict]:
                 "Description": m.description[:50] + "..." if m.description else ""
             })
         
-        # 점수 높은 순 정렬 (2.5 Pro가 있으면 1위가 됨)
         return sorted(scored_models, key=lambda x: x['Score'], reverse=True)
             
     except Exception as e:
@@ -235,9 +228,7 @@ def analyze_with_gemini(api_key: str, data: Dict, model_name: str) -> tuple:
                 match = "✓" if c.get('ai_match') == 'Y' else ("✗" if c.get('ai_match') == 'N' else "")
                 past_text += f"{i}. {c.get('industry','-')} | {c.get('policy_name','-')} | {c.get('approved_amount','-')}만원 {match}\n"
         
-        # 프롬프트 분기 (데이터 양에 따라 최적화)
         if has_s3:
-            # [Full Data] 최종 전략
             prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
 아래 고객 정보를 분석하여 **최종 실행 전략**을 제시해주세요.
 
@@ -264,7 +255,6 @@ def analyze_with_gemini(api_key: str, data: Dict, model_name: str) -> tuple:
 - 예상 승인금액: (만원)"""
 
         elif has_s2:
-            # [Basic Financial] 계약 심사
             prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
 아래 고객 정보를 분석하여 **계약 심사 의견**을 제시해주세요.
 
@@ -288,7 +278,6 @@ def analyze_with_gemini(api_key: str, data: Dict, model_name: str) -> tuple:
 - 예상 승인금액: (만원)"""
         
         else:
-            # [No Financial] 기초 진단 (1차설문만 있음)
             prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
 현재 고객은 **기초 상담 신청(1차)** 단계로 재무 데이터가 없습니다.
 제공된 기본 정보만을 바탕으로 **기초 적합성 진단**을 해주세요.
@@ -324,7 +313,7 @@ def analyze_with_gemini(api_key: str, data: Dict, model_name: str) -> tuple:
         if m1: ai_policy = re.sub(r'^[-:*\s]+', '', m1.group(1).strip())
         m2 = re.search(r'예상.*?승인.*?금액[:\s]*([0-9,]+)', result_text)
         if m2: ai_amount = m2.group(1).replace(',', '')
-        elif not has_s2: # 재무 데이터가 없으면 금액 추산 불가
+        elif not has_s2:
              ai_amount = "상담필요"
         
         return result_text, ai_policy, ai_amount
@@ -376,7 +365,7 @@ def main():
     if "ai_analysis_text" not in st.session_state: st.session_state.ai_analysis_text = None
     if "ai_analysis_model" not in st.session_state: st.session_state.ai_analysis_model = None
 
-    # CSS 적용 (글씨 검정색 강제 적용 포함)
+    # CSS 적용 (글씨 검정색 강제 적용 + 링크 박스 스타일 개선)
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -393,10 +382,34 @@ def main():
     .metric-green { color: #059669; } .metric-red { color: #DC2626; } .metric-orange { color: #D97706; }
     .download-btn { display: block; text-align: center; background: #002855; color: white !important; padding: 14px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; margin-top: 20px; }
     .chat-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 15px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 14px; }
-    .link-box { background: #EFF6FF; border: 2px solid #3B82F6; border-radius: 10px; padding: 16px; margin: 10px 0; }
-    .link-box code { background: white; padding: 8px 12px; border-radius: 6px; display: block; margin: 8px 0; word-break: break-all; }
     
-    /* [수정] 글씨색 검정으로 강제 지정하여 가독성 확보 */
+    /* [수정] 링크 박스 스타일 및 가독성 개선 */
+    .link-box { 
+        background: #EFF6FF; 
+        border: 2px solid #3B82F6; 
+        border-radius: 10px; 
+        padding: 16px; 
+        margin: 10px 0; 
+        color: #000000 !important; /* 전체 글씨 검정 */
+    }
+    .link-box strong {
+        color: #1e40af !important; /* 제목 파란색 */
+        display: block;
+        margin-bottom: 8px;
+    }
+    .link-box code { 
+        background: #ffffff !important; 
+        color: #d97706 !important; /* 링크 텍스트 주황색 */
+        padding: 10px; 
+        border-radius: 6px; 
+        display: block; 
+        margin: 8px 0; 
+        word-break: break-all; 
+        font-weight: bold;
+        border: 1px solid #e5e7eb;
+    }
+    
+    /* AI 요약 박스 */
     .ai-summary-box { background: #F0FDF4; border: 2px solid #22C55E; border-radius: 10px; padding: 16px; margin: 16px 0; color: #000000 !important; }
     .ai-summary-box strong { color: #000000 !important; }
     .ai-summary-box p, .ai-summary-box div { color: #000000 !important; }
@@ -406,7 +419,7 @@ def main():
     st.markdown(f"""
     <div class="unified-header">
         <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
-        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-Pro</div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-Stable</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -460,7 +473,9 @@ def main():
 
             st.markdown(f"### 📊 {s1.get('name', '고객')} 님 (ID: {real_receipt_no})")
             
+            # [레이아웃] 컬럼 및 섹션 정의
             col_staff, col_ceo = st.columns(2)
+            
             with col_staff:
                 with st.expander("⚡ [직원용] 상담/설문", expanded=True):
                     st.link_button("📝 1차 상담", f"{SURVEY1_URL}/?r={real_receipt_no}", use_container_width=True)
@@ -470,17 +485,13 @@ def main():
                     hours = st.selectbox("유효시간", [6, 12, 24], index=2, format_func=lambda x: f"{x}시간", key=f"h_{real_receipt_no}")
                     issue_btn = st.button("🔗 2차 링크 발급", type="primary", use_container_width=True, key=f"i_{real_receipt_no}")
                     
-                    if issue_btn:
-                        with st.spinner("발급 중..."):
-                            r = issue_second_survey_token(real_receipt_no, hours, "dashboard")
-                        st.session_state.issue_result = r
-                    
+                    # [결과 표시] 중복 없이 박스 하나만 표시
                     if st.session_state.issue_result:
                         r = st.session_state.issue_result
                         if r.get("ok"):
                             st.success("✅ 발급 완료!")
-                            st.markdown(f'<div class="link-box"><strong>📋 고객용 링크</strong><code>{r.get("link","")}</code><small>만료: {r.get("expires_at","-")}</small></div>', unsafe_allow_html=True)
-                            st.code(r.get("link", ""))
+                            # st.code() 삭제하고 HTML 박스만 남김
+                            st.markdown(f'<div class="link-box"><strong>📋 고객용 링크 (복사 가능)</strong><code>{r.get("link","")}</code><small style="color:#666;">만료: {r.get("expires_at","-")}</small></div>', unsafe_allow_html=True)
                         else: 
                             st.error(f"❌ 실패: {r.get('error')}")
 
@@ -500,6 +511,13 @@ def main():
                             update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | SYSTEM] ✅ [계약완료]", current_notes)
                             st.session_state.search_result = None
                             st.rerun()
+
+            # [핵심] API 호출 로직은 레이아웃 밖에서 처리 (안정성 확보)
+            if issue_btn:
+                with st.spinner("발급 중..."):
+                    r = issue_second_survey_token(real_receipt_no, hours, "dashboard")
+                st.session_state.issue_result = r
+                st.rerun()
 
             st.markdown("---")
             c1, c2, c3, c4 = st.columns(4)
