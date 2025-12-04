@@ -8,6 +8,7 @@ import base64
 import google.generativeai as genai
 import importlib.metadata
 import re
+import pandas as pd
 
 # ==============================
 # [설정] 설문지 앱 URL 
@@ -144,68 +145,86 @@ def update_consultant_note(receipt_no: str, new_note: str, current_notes: str) -
         return {"status": "error", "message": str(e)}
 
 # ==============================
-# 5. Gemini AI 분석 (2.5 버전 우선)
+# 5. Gemini AI 모델 평가 및 분석 (2.5 Pro 우선 로직)
 # ==============================
-def get_best_model_name(genai_module) -> str:
-    """사용 가능한 최적의 모델명을 찾습니다. (2.5 -> 2.0 -> 1.5 순)"""
+def calc_model_score(name: str) -> int:
+    """
+    모델명 점수 계산 로직
+    - 원칙: 최신 버전(Major.Minor) > Pro > Flash
+    - 예시: gemini-2.5-pro > gemini-2.5-flash > gemini-2.0-pro > gemini-1.5-pro
+    """
+    name_lower = name.lower()
+    score = 0
+    
+    # 1. 버전 파싱 (gemini-X.Y)
+    ver_match = re.search(r'gemini-(\d+)\.(\d+)', name_lower)
+    if ver_match:
+        major = int(ver_match.group(1))
+        minor = int(ver_match.group(2))
+        # 버전 점수: 2.5 -> 25000, 2.0 -> 20000, 1.5 -> 15000
+        score += (major * 10000) + (minor * 1000)
+    
+    # 2. 성능 티어 (Pro 우선)
+    if 'ultra' in name_lower: score += 1000  # 혹시 모를 Ultra 대비
+    elif 'pro' in name_lower: score += 500
+    elif 'flash' in name_lower: score += 400
+    
+    # 3. 최신 날짜 가점 (동일 버전 내 최신 모델)
+    date_match = re.search(r'(\d{2})-?(\d{2})(?!\d)', name_lower)
+    if date_match:
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            score += (month * 10) + day
+    
+    # 4. Latest 가점
+    if 'latest' in name_lower: score += 50
+    
+    # 5. Experimental 처리
+    # 2.5 같은 최신 모델은 exp로 나올 수 있으므로 감점하지 않고 오히려 소폭 가점
+    if 'exp' in name_lower: score += 10 
+    
+    return score
+
+def evaluate_models(api_key: str) -> List[Dict]:
+    """API 키로 사용 가능한 모델 목록을 가져와 점수순 정렬"""
+    if not api_key: return []
     try:
-        models = list(genai_module.list_models())
-        
-        def calc_score(m):
-            name = m.name.lower()
-            score = 0
-            
-            # [핵심] 버전별 점수 차등 부여
-            if 'gemini-2.5' in name: score += 5000  # 2.5 최우선
-            elif 'gemini-2.0' in name: score += 2000 # 2.0 차선
-            elif 'gemini-1.5' in name: score += 1000 # 1.5 기본
-            
-            # 성능 점수
-            if 'pro' in name: score += 500
-            if 'flash' in name: score += 400
-            
-            # 최신 점수
-            if 'latest' in name: score += 100
-            
-            # 날짜가 붙은 경우 (예: 0514) 최신일수록 점수 추가
-            date_match = re.search(r'(\d{2})-(\d{2})', name)
-            if date_match:
-                month = int(date_match.group(1))
-                day = int(date_match.group(2))
-                score += (month * 10) + day
+        genai.configure(api_key=api_key)
+        models = list(genai.list_models())
+        scored_models = []
 
-            # 실험용(exp) 감점
-            if 'exp' in name: score -= 50
+        for m in models:
+            if 'generateContent' not in m.supported_generation_methods:
+                continue
             
-            return score
+            name = m.name.replace('models/', '')
+            score = calc_model_score(name)
 
-        # 텍스트 생성 가능한 모델만 필터링
-        content_models = [m for m in models if 'generateContent' in m.supported_generation_methods]
+            scored_models.append({
+                "Model Name": name,
+                "Score": score,
+                "Description": m.description[:50] + "..." if m.description else ""
+            })
         
-        if content_models:
-            # 점수순 정렬
-            sorted_models = sorted(content_models, key=calc_score, reverse=True)
-            best_model = sorted_models[0].name
-            return best_model.replace('models/', '')
+        # 점수 높은 순 정렬 (2.5 Pro가 있으면 1위가 됨)
+        return sorted(scored_models, key=lambda x: x['Score'], reverse=True)
             
     except Exception as e:
-        print(f"모델 목록 조회 실패: {e}")
-        pass
-    
-    # 목록 조회 실패 시 기본값 (이전에는 1.5로 했으나, 안전하게 1.5 Flash 유지)
-    return 'gemini-1.5-flash'
+        print(f"모델 목록 평가 실패: {e}")
+        return []
 
-def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
+def analyze_with_gemini(api_key: str, data: Dict, model_name: str) -> tuple:
     if not api_key: return "⚠️ Gemini API 키가 설정되지 않았습니다.", "", ""
     try:
         genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
         
-        # 최적 모델 자동 선택
-        target_model_name = get_best_model_name(genai)
+        s1 = data.get('stage1') or {}
+        s2 = data.get('stage2') or {}
+        s3 = data.get('stage3') or {}
         
-        model = genai.GenerativeModel(target_model_name)
-        
-        s1, s2, s3 = data.get('stage1') or {}, data.get('stage2') or {}, data.get('stage3') or {}
+        has_s2 = bool(s2 and any(s2.values()))
         has_s3 = bool(s3 and any(s3.values()))
         
         past_cases = get_past_approvals(s1.get('industry', ''), 5)
@@ -216,7 +235,9 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
                 match = "✓" if c.get('ai_match') == 'Y' else ("✗" if c.get('ai_match') == 'N' else "")
                 past_text += f"{i}. {c.get('industry','-')} | {c.get('policy_name','-')} | {c.get('approved_amount','-')}만원 {match}\n"
         
+        # 프롬프트 분기 (데이터 양에 따라 최적화)
         if has_s3:
+            # [Full Data] 최종 전략
             prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
 아래 고객 정보를 분석하여 **최종 실행 전략**을 제시해주세요.
 
@@ -241,7 +262,9 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
 [AI추천요약]
 - 1순위 정책자금: (정책자금명)
 - 예상 승인금액: (만원)"""
-        else:
+
+        elif has_s2:
+            # [Basic Financial] 계약 심사
             prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
 아래 고객 정보를 분석하여 **계약 심사 의견**을 제시해주세요.
 
@@ -264,7 +287,35 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
 - 1순위 정책자금: (정책자금명)
 - 예상 승인금액: (만원)"""
         
-        with st.spinner(f"🤖 AI({target_model_name})가 분석 중입니다..."):
+        else:
+            # [No Financial] 기초 진단 (1차설문만 있음)
+            prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
+현재 고객은 **기초 상담 신청(1차)** 단계로 재무 데이터가 없습니다.
+제공된 기본 정보만을 바탕으로 **기초 적합성 진단**을 해주세요.
+
+[고객 기본 정보]
+- 고객명: {s1.get('name', '미입력')}
+- 업종: {s1.get('industry', '미입력')}
+- 사업형태: {s1.get('business_type', '미입력')}
+- 필요자금: {s1.get('funding_amount', '미입력')}
+- 세금체납 여부: {s1.get('tax_status', '미입력')}
+- 금융연체 여부: {s1.get('credit_status', '미입력')}
+
+**요청 사항:**
+1. 해당 업종({s1.get('industry')})의 정책자금 지원 일반 경향
+2. 필요 자금 규모({s1.get('funding_amount')})의 적절성 평가
+3. (중요) 2차 심층 상담(재무 확인)이 필요한 이유 설명
+4. 예상되는 주요 정책자금 유형 (보증서, 직접대출 등)
+
+**주의사항:**
+- 재무 데이터가 없으므로 구체적인 승인 한도는 산출하지 말고 범위를 안내하세요.
+
+※ 마지막에 반드시:
+[AI추천요약]
+- 1순위 정책자금: (업종 기반 추천)
+- 예상 승인금액: (상담 필요)"""
+        
+        with st.spinner(f"🤖 AI({model_name})가 분석 중입니다..."):
             response = model.generate_content(prompt)
             result_text = response.text
         
@@ -273,6 +324,8 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
         if m1: ai_policy = re.sub(r'^[-:*\s]+', '', m1.group(1).strip())
         m2 = re.search(r'예상.*?승인.*?금액[:\s]*([0-9,]+)', result_text)
         if m2: ai_amount = m2.group(1).replace(',', '')
+        elif not has_s2: # 재무 데이터가 없으면 금액 추산 불가
+             ai_amount = "상담필요"
         
         return result_text, ai_policy, ai_amount
     except Exception as e:
@@ -282,20 +335,26 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
 # 6. 리포트 생성
 # ==============================
 def generate_full_report(data: Dict, ai_result: str, mode: str) -> str:
-    s1, s2, s3 = data.get('stage1') or {}, data.get('stage2') or {}, data.get('stage3') or {}
+    s1 = data.get('stage1') or {}
+    s2 = data.get('stage2') or {}
+    
+    analysis_type = "최종 실행 전략"
+    if mode == "contract": analysis_type = "계약 심사"
+    elif mode == "basic": analysis_type = "기초 적합성 진단"
+
     return f"""
 ================================================================================
                      유아플랜 정책자금 컨설팅 리포트
 ================================================================================
 생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 접수번호: {data.get('receipt_no', '-')}
-분석유형: {'최종 실행 전략' if mode == 'execution' else '계약 심사'}
+분석유형: {analysis_type}
 
 [1] 고객 정보
 - 고객명: {s1.get('name', '-')}, 업종: {s1.get('industry', '-')}, 필요자금: {s1.get('funding_amount', '-')}
 
 [2] 재무 현황
-- 매출: {s2.get('revenue_y1', '-')}만원, 자본금: {s2.get('capital_amount', '-')}만원, 부채: {s2.get('debt_amount', '-')}만원
+- 매출: {s2.get('revenue_y1', '(정보없음)')}만원, 자본금: {s2.get('capital_amount', '(정보없음)')}만원
 
 [3] AI 분석 결과
 {ai_result}
@@ -314,7 +373,10 @@ def main():
     if "search_result" not in st.session_state: st.session_state.search_result = None
     if "search_query" not in st.session_state: st.session_state.search_query = ""
     if "issue_result" not in st.session_state: st.session_state.issue_result = None
+    if "ai_analysis_text" not in st.session_state: st.session_state.ai_analysis_text = None
+    if "ai_analysis_model" not in st.session_state: st.session_state.ai_analysis_model = None
 
+    # CSS 적용 (글씨 검정색 강제 적용 포함)
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -333,14 +395,18 @@ def main():
     .chat-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 15px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 14px; }
     .link-box { background: #EFF6FF; border: 2px solid #3B82F6; border-radius: 10px; padding: 16px; margin: 10px 0; }
     .link-box code { background: white; padding: 8px 12px; border-radius: 6px; display: block; margin: 8px 0; word-break: break-all; }
-    .ai-summary-box { background: #F0FDF4; border: 2px solid #22C55E; border-radius: 10px; padding: 16px; margin: 16px 0; }
+    
+    /* [수정] 글씨색 검정으로 강제 지정하여 가독성 확보 */
+    .ai-summary-box { background: #F0FDF4; border: 2px solid #22C55E; border-radius: 10px; padding: 16px; margin: 16px 0; color: #000000 !important; }
+    .ai-summary-box strong { color: #000000 !important; }
+    .ai-summary-box p, .ai-summary-box div { color: #000000 !important; }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown(f"""
     <div class="unified-header">
         <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
-        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-Final</div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-Pro</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -353,6 +419,7 @@ def main():
     if search_btn and search_query:
         st.session_state.search_query = search_query.strip()
         st.session_state.issue_result = None
+        st.session_state.ai_analysis_text = None
         with st.spinner("조회 중..."):
             result = fetch_integrated_data(search_query.strip())
         st.session_state.search_result = result
@@ -371,6 +438,7 @@ def main():
             status_match = re.findall(r'\[STATUS_CHANGE\] .*? → (.*)', current_notes)
             if status_match: current_status = status_match[-1]
             is_contracted = "[계약완료]" in current_notes
+            has_s2 = bool(s2 and any(s2.values()))
             has_s3 = bool(s3 and any(s3.values()))
             
             st.markdown("---")
@@ -442,7 +510,6 @@ def main():
                 risk = "⚠️ 주의" if s1.get('tax_status') != "체납 없음" or s1.get('credit_status') != "연체 없음" else "✅ 양호"
                 st.markdown(f'<div class="metric-card"><div class="metric-label">리스크</div><div class="metric-value metric-{"red" if "주의" in risk else "green"}" style="font-size:18px">{risk}</div></div>', unsafe_allow_html=True)
 
-            # [수정됨] 상세 데이터 복구 (UI)
             with st.expander("📂 상세 데이터 보기 (랜딩/1차/2차/3차)", expanded=False):
                 tab1, tab2, tab3 = st.tabs(["1차 (기본/랜딩)", "2차 (심화/재무)", "3차 (심층/전문가)"])
                 
@@ -528,20 +595,50 @@ def main():
                     st.rerun()
 
             st.markdown("---")
-            st.subheader("🤖 AI 분석")
-            ai_output, ai_policy, ai_amount = analyze_with_gemini(GEMINI_API_KEY, data)
-            st.markdown(ai_output)
-            
-            if ai_policy or ai_amount:
-                st.markdown(f'<div class="ai-summary-box"><strong>🎯 AI 추천</strong><br>- 1순위: <strong>{ai_policy or "-"}</strong><br>- 예상금액: <strong>{ai_amount or "-"}만원</strong></div>', unsafe_allow_html=True)
-                st.session_state['ai_policy'] = ai_policy
-                st.session_state['ai_amount'] = ai_amount
-            
-            if ai_output and not ai_output.startswith("⚠️"):
-                mode = "execution" if has_s3 else "contract"
-                report = generate_full_report(data, ai_output, mode)
-                b64 = base64.b64encode(report.encode()).decode()
-                st.markdown(f'<a href="data:text/plain;base64,{b64}" download="유아플랜_{real_receipt_no}.txt" class="download-btn">📥 리포트 다운로드</a>', unsafe_allow_html=True)
+            st.subheader("🤖 AI 정책자금 분석")
+
+            # [수정] 버튼 클릭 시에만 분석 실행 (자동 실행 방지)
+            if not st.session_state.ai_analysis_text:
+                if st.button("🤖 AI 심층 분석 실행 (Gemini 모델 자동 선정)", type="primary"):
+                    scored_models = evaluate_models(GEMINI_API_KEY)
+                    
+                    if scored_models:
+                        best_model_info = scored_models[0]
+                        best_model_name = best_model_info['Model Name']
+                        
+                        st.success(f"✅ 최적 모델: **{best_model_name}** (점수: {best_model_info['Score']})")
+                        
+                        with st.expander("📋 AI 모델 점수표 보기", expanded=True):
+                            df_models = pd.DataFrame(scored_models)
+                            st.dataframe(df_models, use_container_width=True)
+
+                        ai_output, ai_policy, ai_amount = analyze_with_gemini(GEMINI_API_KEY, data, best_model_name)
+                        
+                        st.session_state.ai_analysis_text = ai_output
+                        st.session_state.ai_policy = ai_policy
+                        st.session_state.ai_amount = ai_amount
+                        st.session_state.ai_analysis_model = best_model_name
+                        st.rerun()
+                    else:
+                        st.error("사용 가능한 Gemini 모델을 찾을 수 없습니다. API 키를 확인해주세요.")
+
+            if st.session_state.ai_analysis_text:
+                st.info(f"💡 사용된 AI 모델: **{st.session_state.ai_analysis_model}**")
+                
+                st.markdown(st.session_state.ai_analysis_text)
+                
+                if st.session_state.ai_policy or st.session_state.ai_amount:
+                    st.markdown(f'<div class="ai-summary-box"><strong>🎯 AI 추천 요약</strong><br>- 1순위: <strong>{st.session_state.ai_policy or "-"}</strong><br>- 예상금액: <strong>{st.session_state.ai_amount or "-"}만원</strong></div>', unsafe_allow_html=True)
+                
+                if not st.session_state.ai_analysis_text.startswith("⚠️"):
+                    mode = "execution" if has_s3 else ("contract" if has_s2 else "basic")
+                    report = generate_full_report(data, st.session_state.ai_analysis_text, mode)
+                    b64 = base64.b64encode(report.encode()).decode()
+                    st.markdown(f'<a href="data:text/plain;base64,{b64}" download="유아플랜_{real_receipt_no}.txt" class="download-btn">📥 리포트 다운로드</a>', unsafe_allow_html=True)
+                
+                if st.button("🔄 다시 분석하기"):
+                    st.session_state.ai_analysis_text = None
+                    st.rerun()
 
             st.markdown("---")
             st.subheader("💰 정책자금 결과 저장 (대표 전용)")
