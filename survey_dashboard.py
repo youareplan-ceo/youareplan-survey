@@ -111,7 +111,6 @@ def issue_second_survey_token(receipt_no: str, hours: int = 24, issued_by: str =
 
 def get_past_approvals(industry: str = "", limit: int = 10) -> List[Dict]:
     try:
-        # 3차 GAS로 호출 (정책자금결과 시트가 3차에 있음)
         target_url = THIRD_GAS_URL if THIRD_GAS_URL else INTEGRATED_GAS_URL
         payload = {"action": "get_past_approvals", "api_token": API_TOKEN_3, "industry": industry, "limit": limit}
         response = requests.post(target_url, json=payload, timeout=15)
@@ -123,7 +122,6 @@ def get_past_approvals(industry: str = "", limit: int = 10) -> List[Dict]:
 
 def save_policy_result(receipt_no: str, policy_name: str, approved_amount: str, result_memo: str, ai_recommended_policy: str = "", ai_recommended_amount: str = "") -> Dict:
     try:
-        # 3차 GAS로 호출 (정책자금결과 시트가 3차에 있음)
         target_url = THIRD_GAS_URL if THIRD_GAS_URL else INTEGRATED_GAS_URL
         payload = {
             "action": "save_result", "api_token": API_TOKEN_3, "receipt_no": receipt_no,
@@ -139,7 +137,6 @@ def update_consultant_note(receipt_no: str, new_note: str, current_notes: str) -
     try:
         updated_note = f"{current_notes}\n{new_note}".strip() if current_notes else new_note
         data = {"action": "save_consultation", "api_token": API_TOKEN_3, "receipt_no": receipt_no, "consultant_note": updated_note, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        # 3차 GAS URL이 없으면 1차 GAS로 fallback
         target_url = THIRD_GAS_URL if THIRD_GAS_URL else INTEGRATED_GAS_URL
         res = requests.post(target_url, json=data, timeout=20)
         return res.json() if res.status_code == 200 else {"status": "error", "message": f"HTTP {res.status_code}"}
@@ -176,7 +173,6 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
         s1, s2, s3 = data.get('stage1') or {}, data.get('stage2') or {}, data.get('stage3') or {}
         has_s3 = bool(s3 and any(s3.values()))
         
-        # 과거 승인 사례 조회 (AI 학습용)
         past_cases = get_past_approvals(s1.get('industry', ''), 5)
         past_text = ""
         if past_cases:
@@ -236,7 +232,6 @@ def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
         response = model.generate_content(prompt)
         result_text = response.text
         
-        # AI 추천 정보 파싱
         ai_policy, ai_amount = "", ""
         m1 = re.search(r'1순위.*?정책자금[:\s]*([^\n]+)', result_text)
         if m1: ai_policy = re.sub(r'^[-:*\s]+', '', m1.group(1).strip())
@@ -313,7 +308,7 @@ def main():
     st.markdown(f"""
     <div class="unified-header">
         <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
-        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-session-fix</div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-v2</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -326,7 +321,7 @@ def main():
     # ✅ 조회 버튼 클릭 시 결과를 session_state에 저장
     if search_btn and search_query:
         st.session_state.search_query = search_query.strip()
-        st.session_state.issue_result = None  # 이전 발급 결과 초기화
+        st.session_state.issue_result = None
         with st.spinner("조회 중..."):
             result = fetch_integrated_data(search_query.strip())
         st.session_state.search_result = result
@@ -362,7 +357,7 @@ def main():
                             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
                             res = update_consultant_note(real_receipt_no, f"[{ts} | SYSTEM] [STATUS_CHANGE] {current_status} → {new_status}", current_notes)
                             if res: 
-                                st.session_state.search_result = None  # 갱신을 위해 초기화
+                                st.session_state.search_result = None
                                 st.rerun()
 
             st.markdown(f"### 📊 {s1.get('name', '고객')} 님 (ID: {real_receipt_no})")
@@ -374,11 +369,12 @@ def main():
                     st.link_button("📝 1차 상담", f"{SURVEY1_URL}/?r={real_receipt_no}", use_container_width=True)
                     st.markdown("---")
                     st.markdown("**📨 2차 링크 발급**")
-                    col_h, col_i = st.columns([2, 1])
-                    with col_h: 
-                        hours = st.selectbox("유효시간", [6, 12, 24], index=2, format_func=lambda x: f"{x}시간", key=f"h_{real_receipt_no}")
-                    with col_i: 
-                        issue_btn = st.button("🔗 발급", type="primary", use_container_width=True, key=f"i_{real_receipt_no}")
+                    
+                    # ✅ 수정: 유효시간 선택
+                    hours = st.selectbox("유효시간", [6, 12, 24], index=2, format_func=lambda x: f"{x}시간", key=f"h_{real_receipt_no}")
+                    
+                    # ✅ 수정: 발급 버튼 (전체 너비)
+                    issue_btn = st.button("🔗 2차 링크 발급", type="primary", use_container_width=True, key=f"i_{real_receipt_no}")
                     
                     # ✅ 발급 버튼 클릭 처리
                     if issue_btn:
@@ -386,7 +382,7 @@ def main():
                             r = issue_second_survey_token(real_receipt_no, hours, "dashboard")
                         st.session_state.issue_result = r
                     
-                    # ✅ 발급 결과 표시 (session_state에서)
+                    # ✅ 발급 결과 표시
                     if st.session_state.issue_result:
                         r = st.session_state.issue_result
                         if r.get("ok"):
@@ -471,7 +467,6 @@ def main():
             st.subheader("💰 정책자금 결과 저장 (대표 전용)")
             st.caption("실제 승인 결과를 저장하면 AI 정확도가 향상됩니다.")
             
-            # 대표 비번 검증
             if "result_unlocked" not in st.session_state:
                 st.session_state.result_unlocked = False
             
