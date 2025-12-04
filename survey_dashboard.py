@@ -17,6 +17,12 @@ SURVEY2_URL = "https://your-survey2-app.streamlit.app"
 SURVEY3_URL = "https://your-survey3-app.streamlit.app" 
 
 # ==============================
+# [보안] 접속 비밀번호 설정
+# ==============================
+# 실제 운영 시에는 복잡한 비밀번호로 변경하세요!
+ACCESS_PASSWORD = os.getenv("DASHBOARD_PW", "1234") 
+
+# ==============================
 # 1. 페이지 설정
 # ==============================
 st.set_page_config(
@@ -25,6 +31,37 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# ==============================
+# [NEW] 로그인 보안 함수
+# ==============================
+def check_password():
+    """Returns `True` if the user had the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if st.session_state["password"] == ACCESS_PASSWORD:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store the password
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # First run, show input for password.
+        st.text_input(
+            "🔑 관리자 접속 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password"
+        )
+        return False
+    elif not st.session_state["password_correct"]:
+        # Password not correct, show input + error.
+        st.text_input(
+            "🔑 관리자 접속 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password"
+        )
+        st.error("😕 비밀번호가 틀렸습니다.")
+        return False
+    else:
+        # Password correct.
+        return True
 
 # ==============================
 # 2. 환경 설정 & 로고
@@ -94,13 +131,15 @@ def generate_full_report(data: Dict[str, Any], ai_result: str = "", mode: str = 
     s3 = data.get("stage3") or {}
     metrics = calculate_financial_metrics(s2)
     
+    receipt_no = data.get('receipt_no', '-')
+    
     title = "컨설팅 계약 제안서 (1,2차 분석)" if mode == "contract" else "최종 실행 전략 리포트 (1,2,3차 통합)"
     
     report = f"""
 ==================================================
 [유아플랜] {title}
 ==================================================
-접수번호: {data.get('receipt_no', '-')}
+접수번호: {receipt_no}
 작성일시: {datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 1. 기업 진단 요약
@@ -318,11 +357,12 @@ def generate_execution_prompt(data: Dict[str, Any]) -> str:
 # ==============================
 # 6. API 호출 (메모 업데이트)
 # ==============================
-def fetch_integrated_data(receipt_no: str) -> Dict[str, Any]:
+def fetch_integrated_data(keyword: str) -> Dict[str, Any]:
     try:
+        # [수정] 입력값을 'receipt_no'라는 키로 보내지만, 실제로는 검색 키워드(이름 또는 번호)임
         payload = {
             "action": "get_integrated_view",
-            "receipt_no": receipt_no,
+            "receipt_no": keyword, 
             "api_token": API_TOKEN
         }
         res = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=20)
@@ -351,13 +391,9 @@ def save_policy_result(receipt_no: str, policy_name: str, approved_amount: str, 
 
 def update_consultant_note(receipt_no: str, new_note_content: str, current_notes: str) -> Dict[str, Any]:
     try:
-        # 계약서 링크 저장을 위한 특수 태그 처리
-        # 만약 새 내용이 URL이라면 기존 메모를 덮어쓰지 않고 태그로 추가
-        if new_note_content.startswith("[CONTRACT_LINK]"):
-            # 기존 메모에 이미 링크가 있다면 교체, 없으면 추가 (여기선 단순 추가 방식 사용)
+        if new_note_content.startswith("[CONTRACT_LINK]") or new_note_content.startswith("[STATUS_CHANGE]"):
             updated_note = f"{current_notes}\n{new_note_content}".strip()
         else:
-            # 일반 메모 추가
             updated_note = f"{current_notes}\n{new_note_content}".strip()
             
         data = {
@@ -376,9 +412,26 @@ def update_consultant_note(receipt_no: str, new_note_content: str, current_notes
         return {"status": "error", "message": str(e)}
 
 # ==============================
+# [NEW] 진행 단계 정의
+# ==============================
+PROCESS_STATUS = [
+    "1.신규접수", 
+    "2.상담예정", 
+    "3.서류준비중", 
+    "4.기관접수완료", 
+    "5.현장실사", 
+    "6.최종승인", 
+    "7.부결/보류"
+]
+
+# ==============================
 # 7. UI 메인
 # ==============================
 def main():
+    # [보안] 로그인 체크
+    if not check_password():
+        st.stop()  # 비밀번호 틀리면 여기서 멈춤 (아래 내용 안 보임)
+
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -459,7 +512,7 @@ def main():
             <img src="{LOGO_URL}" alt="Logo">
             <h1>통합 고객 관리 대시보드</h1>
         </div>
-        <div style="font-size:12px; opacity:0.8;">v2.1 | Admin</div>
+        <div style="font-size:12px; opacity:0.8;">v2.3 | Secured</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -493,16 +546,16 @@ def main():
         st.error(f"❌ 치명적 오류: {e}")
         return 
 
-    # 검색바
+    # 검색바 (이름/번호 검색)
     col1, col2 = st.columns([4, 1])
     with col1:
-        receipt_no = st.text_input("접수번호 입력", placeholder="예: YP202511271234", label_visibility="collapsed")
+        search_query = st.text_input("접수번호 또는 고객명 입력", placeholder="예: YP2025... 또는 홍길동", label_visibility="collapsed")
     with col2:
         search_btn = st.button("🔍 고객 조회", type="primary", use_container_width=True)
 
-    if search_btn and receipt_no:
+    if search_btn and search_query:
         with st.spinner("데이터 조회 중..."):
-            result = fetch_integrated_data(receipt_no.strip())
+            result = fetch_integrated_data(search_query.strip())
         
         if result.get("status") == "success":
             data = result.get("data", {})
@@ -511,80 +564,79 @@ def main():
             s3 = data.get("stage3") or {}
             metrics = calculate_financial_metrics(s2)
             
-            has_s3 = bool(s3 and s3.get('coach_notes'))
+            real_receipt_no = data.get('receipt_no') or s1.get('receipt_no') or search_query
             current_notes = s3.get('coach_notes', '') if s3 else ""
-            is_contracted_saved = "[계약완료]" in current_notes
             
-            # [NEW] 계약서 링크 파싱
+            # 진행 상태 파싱
+            current_status = "1.신규접수"
+            status_match = re.findall(r'\[STATUS_CHANGE\] .*? → (.*)', current_notes)
+            if status_match:
+                current_status = status_match[-1]
+
+            is_contracted_saved = "[계약완료]" in current_notes
             contract_link = ""
             link_match = re.search(r'\[CONTRACT_LINK\] (https?://[^\s]+)', current_notes)
-            if link_match:
-                contract_link = link_match.group(1)
+            if link_match: contract_link = link_match.group(1)
 
             st.markdown("---")
-            if has_s3:
-                st.markdown('<span class="stage-badge badge-execution">🚀 최종 실행 단계 (3차 완료)</span>', unsafe_allow_html=True)
-            elif is_contracted_saved:
-                st.markdown('<span class="stage-badge badge-contract" style="background:#D1FAE5; color:#065F46;">✅ 계약 완료 (3차 진행 중)</span>', unsafe_allow_html=True)
-            else:
-                st.markdown('<span class="stage-badge badge-contract">📝 계약 검토 단계 (2차 완료)</span>', unsafe_allow_html=True)
+            col_st1, col_st2 = st.columns([3, 1])
+            with col_st1:
+                if is_contracted_saved:
+                    st.markdown(f'<span class="stage-badge" style="background:#D1FAE5; color:#065F46;">✅ 계약 완료</span> <span class="stage-badge" style="background:#DBEAFE; color:#1E40AF;">📌 현재단계: {current_status}</span>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<span class="stage-badge" style="background:#FEF3C7; color:#92400E;">📝 계약 검토 중</span> <span class="stage-badge" style="background:#F3F4F6; color:#374151;">📌 현재단계: {current_status}</span>', unsafe_allow_html=True)
             
-            st.markdown(f"### 📊 {s1.get('name', '고객')} 님 기업 진단")
+            # 상태 변경 (로그인한 사람만 가능)
+            with col_st2:
+                with st.popover("🔄 상태 변경"):
+                    new_status = st.selectbox("진행 단계 선택", PROCESS_STATUS, index=PROCESS_STATUS.index(current_status) if current_status in PROCESS_STATUS else 0)
+                    if st.button("변경 적용"):
+                        if new_status != current_status:
+                            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            status_log = f"[{ts} | SYSTEM] [STATUS_CHANGE] {current_status} → {new_status}"
+                            with st.spinner("상태 업데이트 중..."):
+                                res = update_consultant_note(real_receipt_no, status_log, current_notes)
+                                if res.get('status') == 'success' or res.get('ok'):
+                                    st.success("상태가 변경되었습니다.")
+                                    st.rerun()
+                                else: st.error("업데이트 실패")
+
+            client_name = s1.get('name', '고객')
+            st.markdown(f"### 📊 {client_name} 님 기업 진단 (ID: {real_receipt_no})")
             
-            # [직원용 & CEO용 버튼 섹션]
+            # [직원 & CEO 섹션]
             col_staff, col_ceo = st.columns(2)
-            
             with col_staff:
                 with st.expander("⚡ [직원용] 상담/설문 대리 작성", expanded=True):
-                    s1_link = f"{SURVEY1_URL}/?r={receipt_no}&name={s1.get('name', '')}&phone={s1.get('phone', '')}"
-                    st.link_button(f"📝 1차 상담 작성 (ID: {receipt_no})", s1_link, use_container_width=True)
-                    s2_link = f"{SURVEY2_URL}/?r={receipt_no}"
-                    st.link_button(f"📊 2차 심화진단 작성 (ID: {receipt_no})", s2_link, use_container_width=True)
+                    s1_link = f"{SURVEY1_URL}/?r={real_receipt_no}&name={s1.get('name', '')}&phone={s1.get('phone', '')}"
+                    st.link_button(f"📝 1차 상담 작성", s1_link, use_container_width=True)
+                    s2_link = f"{SURVEY2_URL}/?r={real_receipt_no}"
+                    st.link_button(f"📊 2차 심화진단 작성", s2_link, use_container_width=True)
 
             with col_ceo:
-                with st.expander("👑 [대표용] 계약 관리 및 3차 상담", expanded=True):
-                    # 1. 계약서 버튼 표시 (링크가 있을 때만)
+                with st.expander("👑 [대표용] 계약/3차 관리", expanded=True):
                     if contract_link:
-                        st.link_button("📄 전자계약서 보기 (이폼싸인)", contract_link, type="primary", use_container_width=True)
+                        st.link_button("📄 전자계약서 보기", contract_link, type="primary", use_container_width=True)
                     
-                    # 2. 계약서 링크 등록 입력창
-                    with st.popover("➕ 계약서 링크 등록/수정"):
-                        new_link = st.text_input("이폼싸인 완료 문서 URL", placeholder="https://eformsign.com/...")
-                        if st.button("링크 저장"):
+                    with st.popover("➕ 계약서 링크 등록"):
+                        new_link = st.text_input("URL 입력")
+                        if st.button("저장"):
                             if new_link:
-                                # 태그 달아서 저장
-                                note_tag = f"[CONTRACT_LINK] {new_link}"
-                                res = update_consultant_note(receipt_no, note_tag, current_notes)
-                                if res.get('status') == 'success' or res.get('ok') == True:
-                                    st.success("계약서가 연동되었습니다.")
-                                    st.rerun()
-                                else:
-                                    st.error("저장 실패")
+                                res = update_consultant_note(real_receipt_no, f"[CONTRACT_LINK] {new_link}", current_notes)
+                                if res: st.rerun()
 
-                    st.divider()
-                    
-                    # 3. 계약 상태 체크 및 3차 상담
-                    contract_checked = st.checkbox("✅ 계약 완료 확인 (3차 링크 생성)", value=is_contracted_saved)
+                    contract_checked = st.checkbox("✅ 계약 완료 확인", value=is_contracted_saved)
                     if contract_checked:
-                        s3_link = f"{SURVEY3_URL}/?r={receipt_no}&name={s1.get('name', '')}&phone={s1.get('phone', '')}"
-                        st.link_button(f"🚀 3차 심층 상담 작성하기", s3_link, type="secondary", use_container_width=True)
-                        
+                        s3_link = f"{SURVEY3_URL}/?r={real_receipt_no}&name={s1.get('name', '')}&phone={s1.get('phone', '')}"
+                        st.link_button(f"🚀 3차 심층 상담", s3_link, type="secondary", use_container_width=True)
                         if not is_contracted_saved:
-                            if st.button("💾 계약 상태 저장하기"):
-                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-                                sys_note = f"[{timestamp} | SYSTEM] ✅ 계약 완료 상태로 변경되었습니다."
-                                with st.spinner("상태 업데이트 중..."):
-                                    res = update_consultant_note(receipt_no, sys_note, current_notes)
-                                    if res.get('status') == 'success' or res.get('ok') == True:
-                                        st.success("상태가 저장되었습니다.")
-                                        st.rerun()
-                                    else:
-                                        st.error("저장 실패")
-                    else:
-                        st.info("계약이 완료되면 체크해주세요.")
+                            if st.button("계약상태 저장"):
+                                ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                res = update_consultant_note(real_receipt_no, f"[{ts} | SYSTEM] ✅ [계약완료] 처리됨", current_notes)
+                                if res: st.rerun()
 
+            # ... (지표 및 탭 코드는 동일, 생략 없이 유지) ...
             st.markdown("---")
-            # ... (나머지 지표 카드 및 상세 데이터 코드는 기존과 동일) ...
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
             with col_m1:
                 st.markdown(f"""<div class="metric-card"><div class="metric-label">업종</div><div class="metric-value" style="font-size:16px;">{s1.get('industry', '-')}</div></div>""", unsafe_allow_html=True)
@@ -624,31 +676,24 @@ def main():
                         st.write(f"**메모:** {s3.get('coach_notes', '-')}")
                     else: st.info("데이터 없음")
 
+            # 내부 소통 (메모장)
             st.markdown("---")
-            client_name_title = s1.get('name', '고객')
-            with st.expander(f"📢 [{client_name_title}] 님 관련 내부 소통 및 히스토리", expanded=True):
-                # 링크 태그는 화면에 지저분하게 보일 수 있으니 제거하고 보여주기 (옵션)
-                clean_notes = current_notes.replace("[CONTRACT_LINK]", "📄 계약서 링크:")
-                if not clean_notes: clean_notes = "(메모 없음)"
-                st.markdown(f"""<div class="chat-box">{clean_notes}</div>""", unsafe_allow_html=True)
+            with st.expander(f"📢 [{client_name}] 님 관련 소통 로그", expanded=True):
+                display_notes = current_notes.replace("[CONTRACT_LINK]", "📄 계약서:").replace("[STATUS_CHANGE]", "🔄 상태변경:")
+                if not display_notes: display_notes = "(기록 없음)"
+                st.markdown(f"""<div class="chat-box">{display_notes}</div>""", unsafe_allow_html=True)
                 
                 st.write("")
-                col_w, col_i = st.columns([1, 4])
-                with col_w: writer = st.selectbox("작성자", ["직원", "대표"], key="nw")
-                with col_i: new_note = st.text_input("내용 입력", key="ni")
-                
-                if st.button("💬 메모 등록"):
-                    if new_note:
+                c_w, c_i = st.columns([1, 4])
+                with c_w: w = st.selectbox("작성자", ["직원", "대표"], key="w")
+                with c_i: n = st.text_input("내용", key="n")
+                if st.button("등록"):
+                    if n:
                         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        fmt_note = f"[{ts} | {writer}] {new_note}"
-                        with st.spinner("저장 중..."):
-                            res = update_consultant_note(receipt_no, fmt_note, s3.get('coach_notes', ''))
-                            if res.get('status') == 'success' or res.get('ok'):
-                                st.success("등록됨")
-                                st.rerun()
-                            else: st.error("실패")
+                        res = update_consultant_note(real_receipt_no, f"[{ts} | {w}] {n}", current_notes)
+                        if res: st.rerun()
 
-            # AI 분석 및 다운로드 (기존 코드 유지)
+            # AI 분석 및 다운로드
             st.markdown("---")
             st.subheader("🤖 AI 최종 실행 전략")
             ai_output = analyze_with_gemini(GEMINI_API_KEY, data)
@@ -658,12 +703,9 @@ def main():
                 mode = "execution" if has_s3 else "contract"
                 full_text = generate_full_report(data, ai_output, mode)
                 btn_label = "📥 최종 리포트 다운로드"
-                filename = f"유아플랜_{receipt_no}.txt"
+                filename = f"유아플랜_{real_receipt_no}.txt"
                 b64 = base64.b64encode(full_text.encode()).decode()
                 st.markdown(f'<a href="data:text/plain;base64,{b64}" download="{filename}" class="download-btn">{btn_label}</a>', unsafe_allow_html=True)
-
-            # 결과 저장 폼 (기존 유지)
-            # ... (코드 생략, 위와 동일) ...
 
         else:
             st.error(f"❌ 조회 실패: {result.get('message', '알 수 없는 오류')}")

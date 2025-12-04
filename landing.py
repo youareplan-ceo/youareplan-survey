@@ -1,7 +1,12 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 import re
 import os
+import hashlib
+import time
+import json
+import uuid
 from datetime import datetime
 import random
 
@@ -16,38 +21,126 @@ st.set_page_config(
 )
 
 # ==============================
-# [필수] 메타 픽셀 ID 설정
+# [설정] Meta Pixel & CAPI
 # ==============================
 META_PIXEL_ID = "1523433105534274"
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+CURRENT_URL = "https://youareplan-landing.onrender.com"
 
 # ==============================
 # 환경 설정
 # ==============================
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
-
-# 구글 시트 연동 URL
 APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 
 # ==============================
-# 픽셀 코드 삽입 (기본 View)
+# [추가] UTM 파라미터 읽기
 # ==============================
-pixel_html = f"""
-<script>
-!function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)}};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}}(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '{META_PIXEL_ID}');
-fbq('track', 'PageView');
-</script>
-<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id={META_PIXEL_ID}&ev=PageView&noscript=1"/></noscript>
-"""
-st.markdown(pixel_html, unsafe_allow_html=True)
+def get_utm_params():
+    """URL에서 UTM 파라미터를 읽어옵니다."""
+    return {
+        'utm_source': st.query_params.get("utm_source", "direct"),
+        'utm_campaign': st.query_params.get("utm_campaign", "unknown"),
+        'utm_content': st.query_params.get("utm_content", "unknown"),
+        'utm_medium': st.query_params.get("utm_medium", "unknown"),
+        'utm_term': st.query_params.get("utm_term", "unknown")
+    }
+
+# ==============================
+# [기능 1] 클라이언트 사이드 픽셀 (iframe 방식)
+# ==============================
+def inject_facebook_pixel(event_name="PageView", custom_data=None, event_id=None):
+    """
+    Streamlit Components를 사용하여 샌드박스(iframe) 내에서 픽셀 스크립트를 실행합니다.
+    """
+    
+    if event_id is None:
+        event_id = str(uuid.uuid4())
+    
+    if custom_data:
+        tracking_params = {**custom_data, "page_location": CURRENT_URL}
+    else:
+        tracking_params = {"page_location": CURRENT_URL}
+    
+    params_json = json.dumps(tracking_params)
+
+    pixel_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      
+      fbq('init', '{META_PIXEL_ID}');
+      fbq('track', '{event_name}', {params_json}, {{eventID: '{event_id}'}});
+    </script>
+    </head>
+    <body></body>
+    </html>
+    """
+    components.html(pixel_code, height=0, width=0)
+    
+    return event_id
+
+# ==============================
+# [기능 2] 서버 사이드 API (CAPI)
+# ==============================
+def send_meta_event(event_name, user_data=None, event_id=None):
+    """
+    Meta Conversions API (서버 사이드 전송)
+    """
+    if not META_ACCESS_TOKEN:
+        return None
+    
+    if event_id is None:
+        event_id = str(uuid.uuid4())
+        
+    url = f"https://graph.facebook.com/v18.0/{META_PIXEL_ID}/events"
+    
+    hashed_user_data = {}
+    if user_data:
+        if 'phone' in user_data:
+            raw_phone = re.sub(r"[^0-9]", "", str(user_data['phone']))
+            if raw_phone:
+                if raw_phone.startswith('0'):
+                    clean_phone = '82' + raw_phone[1:]
+                else:
+                    clean_phone = '82' + raw_phone
+                hashed_user_data['ph'] = hashlib.sha256(clean_phone.encode('utf-8')).hexdigest()
+
+    payload = {
+        "data": [{
+            "event_name": event_name,
+            "event_id": event_id,
+            "event_time": int(time.time()),
+            "action_source": "website",
+            "event_source_url": CURRENT_URL,
+            "user_data": hashed_user_data
+        }],
+        "access_token": META_ACCESS_TOKEN
+    }
+    
+    try:
+        requests.post(url, json=payload, timeout=2)
+    except Exception:
+        pass
+    
+    return event_id
 
 # ==============================
 # 유틸리티 함수
 # ==============================
 def _digits_only(s: str) -> str:
-    return re.sub(r"[^0-9]", "", s or "")
+    return re.sub(r"[^0-9]", "", str(s) if s else "")
 
 def format_phone(d: str) -> str:
     if len(d) == 11 and d.startswith("010"):
@@ -57,7 +150,6 @@ def format_phone(d: str) -> str:
 def save_to_sheet(data: dict) -> dict:
     try:
         data['token'] = API_TOKEN
-        # 타임아웃 20초로 안정성 확보
         resp = requests.post(APPS_SCRIPT_URL, json=data, timeout=20)
         return resp.json() if resp.status_code == 200 else {"status": "error"}
     except Exception as e:
@@ -124,12 +216,30 @@ def main():
     if 'form_submitted' not in st.session_state:
         st.session_state.form_submitted = False
     
+    # UTM 파라미터 저장 (페이지 로드 시 1회)
+    if 'utm_params' not in st.session_state:
+        st.session_state.utm_params = get_utm_params()
+
+    # PageView 이벤트 (중복 방지)
+    if not st.session_state.get('page_view_fired'):
+        if not st.session_state.form_submitted:
+            inject_facebook_pixel("PageView")
+            st.session_state.page_view_fired = True
+    
     # [화면 1] 완료 화면 (제출 성공 시)
     if st.session_state.form_submitted:
-        # 1. 픽셀 Lead 이벤트 전송 (중복 전송 방지 로직 포함)
-        if not st.session_state.get('pixel_fired', False):
-            st.markdown(f"<script>fbq('track', 'Lead');</script>", unsafe_allow_html=True)
-            st.session_state.pixel_fired = True
+        
+        # Lead 이벤트 전송
+        if not st.session_state.get('lead_pixel_fired', False):
+            event_id = str(uuid.uuid4())
+            
+            inject_facebook_pixel("Lead", event_id=event_id)
+            
+            user_phone = st.session_state.get('submitted_phone', '')
+            if user_phone:
+                send_meta_event("Lead", {"phone": user_phone}, event_id=event_id)
+                
+            st.session_state.lead_pixel_fired = True
             
         st.success("✅ 신청이 정상적으로 접수되었습니다!")
         
@@ -141,10 +251,11 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
         
-        # '새로 신청하기' 버튼
         if st.button("새로운 상담 신청하기"):
             st.session_state.form_submitted = False
-            st.session_state.pixel_fired = False # 픽셀 상태도 초기화
+            st.session_state.lead_pixel_fired = False
+            st.session_state.page_view_fired = False
+            st.session_state.submitted_phone = ''
             st.rerun()
 
     # [화면 2] 입력 폼 (기본 화면)
@@ -179,19 +290,31 @@ def main():
                         receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
+                        # UTM 파라미터 가져오기
+                        utm = st.session_state.utm_params
+                        
                         data = {
-                            'name': name, 'phone': formatted_phone,
-                            'business_type': business_type, 'funding_amount': funding_amount,
-                            'receipt_no': receipt_no, 'timestamp': timestamp,
-                            'source': 'landing_page_mobile'
+                            'name': name,
+                            'phone': formatted_phone,
+                            'business_type': business_type,
+                            'funding_amount': funding_amount,
+                            'receipt_no': receipt_no,
+                            'timestamp': timestamp,
+                            'source': 'landing_page_mobile',
+                            # UTM 파라미터 추가
+                            'utm_source': utm['utm_source'],
+                            'utm_campaign': utm['utm_campaign'],
+                            'utm_content': utm['utm_content'],
+                            'utm_medium': utm['utm_medium'],
+                            'utm_term': utm['utm_term']
                         }
                         
                         save_to_sheet(data)
                         
-                        # 상태 업데이트 후 화면 리로드
                         st.session_state.form_submitted = True
                         st.session_state.last_receipt_no = receipt_no
-                        st.session_state.pixel_fired = False # 다음 화면에서 픽셀을 쏘기 위해 False로 설정
+                        st.session_state.submitted_phone = phone_digits
+                        st.session_state.lead_pixel_fired = False 
                         st.rerun()
 
     # 푸터
