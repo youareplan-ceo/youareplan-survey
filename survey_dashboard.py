@@ -2,25 +2,24 @@ import streamlit as st
 import requests
 import json
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import os
 import base64
 import google.generativeai as genai
-import importlib.metadata
-import re # 정규표현식
+import re
 
 # ==============================
-# [설정] 설문지 앱 URL (배포된 실제 주소로 변경하세요!)
+# [설정] 설문지 앱 URL 
 # ==============================
-SURVEY1_URL = "https://your-survey1-app.streamlit.app" 
-SURVEY2_URL = "https://your-survey2-app.streamlit.app" 
-SURVEY3_URL = "https://your-survey3-app.streamlit.app" 
+SURVEY1_URL = "https://youareplan-survey.onrender.com" 
+SURVEY2_URL = "https://youareplan-survey2.onrender.com" 
+SURVEY3_URL = "https://youareplan-survey3.onrender.com" 
 
 # ==============================
 # [보안] 접속 비밀번호 설정
 # ==============================
-# 실제 운영 시에는 복잡한 비밀번호로 변경하세요!
-ACCESS_PASSWORD = os.getenv("DASHBOARD_PW", "1234") 
+ACCESS_PASSWORD = os.getenv("DASHBOARD_PW", "1234")
+RESULT_PASSWORD = os.getenv("RESULT_PW", "1234")  # 대표 전용 (결과 저장) 
 
 # ==============================
 # 1. 페이지 설정
@@ -36,31 +35,21 @@ st.set_page_config(
 # [NEW] 로그인 보안 함수
 # ==============================
 def check_password():
-    """Returns `True` if the user had the correct password."""
-
     def password_entered():
-        """Checks whether a password entered by the user is correct."""
         if st.session_state["password"] == ACCESS_PASSWORD:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store the password
+            del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        # First run, show input for password.
-        st.text_input(
-            "🔑 관리자 접속 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password"
-        )
+        st.text_input("🔑 관리자 접속 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        # Password not correct, show input + error.
-        st.text_input(
-            "🔑 관리자 접속 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password"
-        )
+        st.text_input("🔑 관리자 접속 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
         st.error("😕 비밀번호가 틀렸습니다.")
         return False
     else:
-        # Password correct.
         return True
 
 # ==============================
@@ -71,8 +60,8 @@ LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/m
 INTEGRATED_GAS_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 
-# [3차] URL (메모/계약 업데이트용)
-THIRD_GAS_URL = os.getenv("THIRD_GAS_URL", "https://script.google.com/macros/s/YOUR_GAS_ID/exec")
+# 3차 GAS URL (없으면 1차 GAS로 fallback)
+THIRD_GAS_URL = os.getenv("THIRD_GAS_URL", "")
 API_TOKEN_3 = os.getenv("API_TOKEN_3", "youareplan_stage3")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -81,637 +70,410 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # 3. 재무 지표 계산 함수
 # ==============================
 def calculate_financial_metrics(s2: Dict) -> Dict:
-    metrics = {
-        "debt_ratio": "-", "debt_status": "gray",
-        "growth_rate": "-", "growth_status": "gray"
-    }
-    
-    if not s2:
-        return metrics
-
+    metrics = {"debt_ratio": "-", "debt_status": "gray", "growth_rate": "-", "growth_status": "gray"}
+    if not s2: return metrics
     try:
         capital = int(str(s2.get('capital_amount', '0')).replace(',', '').replace('만원', ''))
         debt = int(str(s2.get('debt_amount', '0')).replace(',', '').replace('만원', ''))
         if capital > 0:
             ratio = round((debt / capital) * 100)
             metrics['debt_ratio'] = f"{ratio}%"
-            if ratio > 400:
-                metrics['debt_status'] = "red"
-            elif ratio > 200:
-                metrics['debt_status'] = "orange"
-            else:
-                metrics['debt_status'] = "green"
-    except:
-        pass
-
+            metrics['debt_status'] = "red" if ratio > 400 else ("orange" if ratio > 200 else "green")
+    except: pass
     try:
-        rev_prev = int(str(s2.get('revenue_y2', '0')).replace(',', ''))
-        rev_curr = int(str(s2.get('revenue_y1', '0')).replace(',', '')) 
-        if rev_prev > 0:
-            growth = round(((rev_curr - rev_prev) / rev_prev) * 100)
-            sign = "+" if growth > 0 else ""
-            metrics['growth_rate'] = f"{sign}{growth}%"
-            if growth >= 20:
-                metrics['growth_status'] = "blue"
-            elif growth > 0:
-                metrics['growth_status'] = "green"
-            else:
-                metrics['growth_status'] = "red"
-    except:
-        pass
-    
+        r1 = int(str(s2.get('revenue_y1', '0')).replace(',', '').replace('만원', ''))
+        r2 = int(str(s2.get('revenue_y2', '0')).replace(',', '').replace('만원', ''))
+        if r2 > 0:
+            growth = round(((r1 - r2) / r2) * 100)
+            metrics['growth_rate'] = f"{growth}%"
+            metrics['growth_status'] = "green" if growth > 20 else ("red" if growth < -10 else "gray")
+    except: pass
     return metrics
 
 # ==============================
-# 4. 리포트 텍스트 생성
+# 4. GAS API 호출 함수
 # ==============================
-def generate_full_report(data: Dict[str, Any], ai_result: str = "", mode: str = "contract") -> str:
-    s1 = data.get("stage1") or {}
-    s2 = data.get("stage2") or {}
-    s3 = data.get("stage3") or {}
-    metrics = calculate_financial_metrics(s2)
-    
-    receipt_no = data.get('receipt_no', '-')
-    
-    title = "컨설팅 계약 제안서 (1,2차 분석)" if mode == "contract" else "최종 실행 전략 리포트 (1,2,3차 통합)"
-    
-    report = f"""
-==================================================
-[유아플랜] {title}
-==================================================
-접수번호: {receipt_no}
-작성일시: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-
-1. 기업 진단 요약
---------------------------------------------------
-- 고객명: {s1.get('name', '-')}
-- 업종: {s1.get('industry', '-')}
-- 지역: {s1.get('region', '-')}
-- 사업형태: {s1.get('business_type', '-')}
-- 직원수: {s1.get('employee_count', '-')}
-- 필요자금: {s1.get('funding_amount', '-')}
-"""
-
-    if s2:
-        report += f"""
-2. 재무 현황 (2차)
---------------------------------------------------
-- 사업자명: {s2.get('business_name', '-')}
-- 사업시작일: {s2.get('startup_date', '-')}
-- 올해 매출: {s2.get('revenue_y1', '-')}만원
-- 전년 매출: {s2.get('revenue_y2', '-')}만원
-- 자본금: {s2.get('capital_amount', '-')}만원
-- 부채: {s2.get('debt_amount', '-')}만원
-- 부채비율: {metrics['debt_ratio']}
-- 성장률: {metrics['growth_rate']}
-- 특허/인증: {s2.get('ip_status', '-')} / {s2.get('official_certs', '-')}
-- 자금용도: {s2.get('funding_purpose', '-')}
-"""
-
-    if s3 and mode == "execution":
-        report += f"""
-3. 심층 분석 (3차)
---------------------------------------------------
-- 담보/보증: {s3.get('collateral_profile', '-')}
-- 세무/신용: {s3.get('tax_credit_summary', '-')}
-- 기존 대출: {s3.get('loan_summary', '-')}
-- 준비 서류: {s3.get('docs_check', '-')}
-- 리스크: {s3.get('risk_top3', '-')}
-- 컨설턴트 메모: {s3.get('coach_notes', '-')}
-"""
-
-    report += f"""
-4. AI 분석 결과
---------------------------------------------------
-{ai_result if ai_result else "AI 분석을 실행해주세요."}
-
-==================================================
-"""
-    return report.strip()
-
-# ==============================
-# 5. AI 분석 로직
-# ==============================
-def calculate_model_score(model_name: str) -> float:
-    score = 0.0
-    name_lower = model_name.lower()
-    
-    version_match = re.search(r'(\d+)\.(\d+)', name_lower)
-    if version_match:
-        major = int(version_match.group(1))
-        minor = int(version_match.group(2))
-        score += (major * 100000) + (minor * 10000)
-    
-    date_match = re.search(r'(\d{2})-(\d{2})', name_lower) 
-    if date_match:
-        month = int(date_match.group(1))
-        day = int(date_match.group(2))
-        score += (month * 100) + day
-    elif '001' in name_lower: score += 1
-    elif '002' in name_lower: score += 2
-
-    if 'latest' in name_lower:
-        score += 5000 
-    elif not date_match and 'pro' in name_lower and 'preview' not in name_lower:
-        score += 8000
-        
-    return score
-
-def get_sorted_models(model_list: list) -> list:
-    candidates = [m for m in model_list if 'image' not in m.lower() and 'vision' not in m.lower()]
-    if not candidates: return []
-    candidates.sort(key=calculate_model_score, reverse=True)
-    return candidates
-
-def analyze_with_gemini(api_key: str, data: Dict[str, Any]) -> str:
-    if not api_key:
-        return "⚠️ API 키가 설정되지 않았습니다."
-    
+def fetch_integrated_data(receipt_no: str) -> Dict:
     try:
-        genai.configure(api_key=api_key)
-        
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        if not available_models:
-            return "⚠️ 사용 가능한 AI 모델을 찾을 수 없습니다."
-
-        sorted_models = get_sorted_models(available_models)
-        target_model_name = sorted_models[0]
-        
-        st.session_state['debug_sorted_models'] = sorted_models
-
-        model = genai.GenerativeModel(target_model_name)
-        
-        s3 = data.get("stage3")
-        
-        if s3 and s3.get('coach_notes'):
-            prompt = generate_execution_prompt(data)
-            display_name = target_model_name.replace('models/', '')
-            msg = f"🧠 [{display_name}] AI가 정밀 분석 중입니다... (5~10초)"
-        else:
-            prompt = generate_contract_prompt(data)
-            display_name = target_model_name.replace('models/', '')
-            msg = f"⚖️ [{display_name}] AI가 심사 중입니다... (5~10초)"
-            
-        with st.spinner(msg):
-            response = model.generate_content(prompt)
-            return response.text
-            
-    except Exception as e:
-        try:
-            ver = importlib.metadata.version('google-generativeai')
-        except:
-            ver = "unknown"
-        return f"⚠️ AI 분석 오류: {str(e)}\n(SDK: {ver})"
-
-def generate_contract_prompt(data: Dict[str, Any]) -> str:
-    s1 = data.get("stage1") or {}
-    s2 = data.get("stage2") or {}
-    metrics = calculate_financial_metrics(s2)
-    
-    return f"""
-당신은 대한민국 최고의 정책자금 전문 컨설팅펌의 수석 심사역입니다.
-제공된 기업 데이터를 바탕으로 매우 논리적이고 비판적인 시각에서 계약 여부를 판단하십시오.
-
-# [기업 데이터]
-- 고객명: {s1.get('name', '-')}
-- 업종: {s1.get('industry', '-')}
-- 지역: {s1.get('region', '-')}
-- 사업형태: {s1.get('business_type', '-')}
-- 직원수: {s1.get('employee_count', '-')}
-- 필요자금: {s1.get('funding_amount', '-')}
-- 정책자금 경험: {s1.get('policy_experience', '-')}
-
-# [재무 현황]
-- 사업자명: {s2.get('business_name', '-')}
-- 업력: {s2.get('startup_date', '-')}
-- 최근 매출: {s2.get('revenue_y1', '0')}만원
-- 전년 매출: {s2.get('revenue_y2', '0')}만원
-- 자본금: {s2.get('capital_amount', '0')}만원
-- 부채: {s2.get('debt_amount', '0')}만원
-- 부채비율: {metrics['debt_ratio']}
-- 매출성장률: {metrics['growth_rate']}
-
-# [리스크 현황]
-- 세금 체납: {s1.get('tax_status', '-')}
-- 금융 연체: {s1.get('credit_status', '-')}
-- 영업 상태: {s1.get('business_status', '-')}
-
-# [요청 사항 - Markdown 형식]
-## 1. 종합 수임 판정 (심사 결과)
-- 판정: [강력 추천 / 진행 가능 / 조건부 진행 / 수임 불가] 중 택 1
-- 근거: 3줄 요약
-
-## 2. 맞춤형 정책자금 매칭 전략
-- 추천 자금 2~3개 (기관명, 자금명, 한도, 확률)
-
-## 3. 컨설팅 세일즈 포인트
-- 고객 설득을 위한 강점 및 약점 포인트
-
-## 4. 사전 점검 및 리스크 헤징
-- 심사 시 예상되는 문제점과 대응 논리
-""".strip()
-
-def generate_execution_prompt(data: Dict[str, Any]) -> str:
-    s1 = data.get("stage1") or {}
-    s2 = data.get("stage2") or {}
-    s3 = data.get("stage3") or {}
-    metrics = calculate_financial_metrics(s2)
-    
-    return f"""
-당신은 정책자금 실행을 전담하는 수석 컨설턴트입니다.
-'자금을 실제로 받아내기 위한' 구체적이고 실현 가능한 전략을 수립하십시오.
-
-# [기업 프로파일]
-- 기업명: {s2.get('business_name', '-')} ({s1.get('industry', '-')})
-- 업력/규모: {s2.get('startup_date', '-')} 설립 / 매출 {s2.get('revenue_y1', '0')}만원
-- 재무상태: 부채비율 {metrics['debt_ratio']}, 성장률 {metrics['growth_rate']}
-- 기술/인증: {s2.get('ip_status', '-')} / {s2.get('official_certs', '-')}
-
-# [심층 분석 데이터 (3차)]
-- 담보/보증 여력: {s3.get('collateral_profile', '-')}
-- 신용/세무 이슈: {s3.get('tax_credit_summary', '-')}
-- 기대출 현황: {s3.get('loan_summary', '-')}
-- 준비 서류: {s3.get('docs_check', '-')}
-- 가점/감점 요인: {s3.get('priority_exclusion', '-')}
-- 핵심 리스크: {s3.get('risk_top3', '-')}
-- 컨설턴트 메모: {s3.get('coach_notes', '-')}
-
-# [전략 리포트 작성 가이드]
-## 1. 승인 가능성 정밀 진단
-- 승인 확률 (상/중/하) 및 종합 평가
-
-## 2. 최적 자금 조달 로드맵
-- 1순위 / 2순위 공략 자금 및 신청 적기
-
-## 3. 핵심 보완 솔루션
-- 승인율을 높이기 위한 즉각적인 실행 방안
-
-## 4. 예상 질문 및 답변 (Q&A)
-- 실사 예상 질문 2가지와 모범 답변
-
-## 5. 실행 타임라인
-- 주차별 실행 계획
-""".strip()
-
-# ==============================
-# 6. API 호출 (메모 업데이트)
-# ==============================
-def fetch_integrated_data(keyword: str) -> Dict[str, Any]:
-    try:
-        # [수정] 입력값을 'receipt_no'라는 키로 보내지만, 실제로는 검색 키워드(이름 또는 번호)임
-        payload = {
-            "action": "get_integrated_view",
-            "receipt_no": keyword, 
-            "api_token": API_TOKEN
-        }
-        res = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=20)
-        if res.status_code == 200:
-            return res.json()
-        return {"status": "error", "message": f"HTTP {res.status_code}"}
+        payload = {"action": "get_integrated_view", "receipt_no": receipt_no, "api_token": API_TOKEN}
+        response = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=20)
+        return response.json() if response.status_code == 200 else {"status": "error", "message": f"HTTP {response.status_code}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def save_policy_result(receipt_no: str, policy_name: str, approved_amount: str, result_memo: str) -> Dict[str, Any]:
+def issue_second_survey_token(receipt_no: str, hours: int = 24, issued_by: str = "dashboard") -> Dict:
     try:
+        payload = {"action": "issue_token", "api_token": API_TOKEN, "receipt_no": receipt_no, "hours": hours, "issued_by": issued_by}
+        response = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=20)
+        return response.json() if response.status_code == 200 else {"ok": False, "error": f"HTTP {response.status_code}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+def get_past_approvals(industry: str = "", limit: int = 10) -> List[Dict]:
+    try:
+        # 3차 GAS로 호출 (정책자금결과 시트가 3차에 있음)
+        target_url = THIRD_GAS_URL if THIRD_GAS_URL else INTEGRATED_GAS_URL
+        payload = {"action": "get_past_approvals", "api_token": API_TOKEN_3, "industry": industry, "limit": limit}
+        response = requests.post(target_url, json=payload, timeout=15)
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("status") == "success": return result.get("data", [])
+        return []
+    except: return []
+
+def save_policy_result(receipt_no: str, policy_name: str, approved_amount: str, result_memo: str, ai_recommended_policy: str = "", ai_recommended_amount: str = "") -> Dict:
+    try:
+        # 3차 GAS로 호출 (정책자금결과 시트가 3차에 있음)
+        target_url = THIRD_GAS_URL if THIRD_GAS_URL else INTEGRATED_GAS_URL
         payload = {
-            "action": "save_result",
-            "api_token": API_TOKEN,
-            "receipt_no": receipt_no,
-            "policy_name": policy_name,
-            "approved_amount": approved_amount,
-            "result_memo": result_memo
+            "action": "save_result", "api_token": API_TOKEN_3, "receipt_no": receipt_no,
+            "policy_name": policy_name, "approved_amount": approved_amount, "result_memo": result_memo,
+            "ai_recommended_policy": ai_recommended_policy, "ai_recommended_amount": ai_recommended_amount
         }
-        res = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=20)
-        if res.status_code == 200:
-            return res.json()
-        return {"status": "error", "message": f"HTTP {res.status_code}"}
+        response = requests.post(target_url, json=payload, timeout=20)
+        return response.json() if response.status_code == 200 else {"status": "error", "message": f"HTTP {response.status_code}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def update_consultant_note(receipt_no: str, new_note_content: str, current_notes: str) -> Dict[str, Any]:
+def update_consultant_note(receipt_no: str, new_note: str, current_notes: str) -> Dict:
     try:
-        if new_note_content.startswith("[CONTRACT_LINK]") or new_note_content.startswith("[STATUS_CHANGE]"):
-            updated_note = f"{current_notes}\n{new_note_content}".strip()
-        else:
-            updated_note = f"{current_notes}\n{new_note_content}".strip()
-            
-        data = {
-            "action": "save_consultation", 
-            "api_token": API_TOKEN_3, 
-            "receipt_no": receipt_no, 
-            "consultant_note": updated_note,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+        updated_note = f"{current_notes}\n{new_note}".strip() if current_notes else new_note
+        data = {"action": "save_consultation", "api_token": API_TOKEN_3, "receipt_no": receipt_no, "consultant_note": updated_note, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        # 3차 GAS URL이 없으면 1차 GAS로 fallback
         target_url = THIRD_GAS_URL if THIRD_GAS_URL else INTEGRATED_GAS_URL
         res = requests.post(target_url, json=data, timeout=20)
-        if res.status_code == 200:
-            return res.json()
-        return {"status": "error", "message": f"HTTP {res.status_code}"}
+        return res.json() if res.status_code == 200 else {"status": "error", "message": f"HTTP {res.status_code}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 # ==============================
-# [NEW] 진행 단계 정의
+# 5. Gemini AI 분석
 # ==============================
-PROCESS_STATUS = [
-    "1.신규접수", 
-    "2.상담예정", 
-    "3.서류준비중", 
-    "4.기관접수완료", 
-    "5.현장실사", 
-    "6.최종승인", 
-    "7.부결/보류"
-]
+def get_sorted_models(genai_module):
+    try:
+        models = list(genai_module.list_models())
+        def calc_score(m):
+            name = m.name.lower()
+            score = 0
+            if 'gemini-1.5-flash' in name: score += 100
+            elif 'gemini-1.5-pro' in name: score += 90
+            elif 'gemini-pro' in name: score += 80
+            if '-latest' in name: score += 20
+            if 'exp' in name: score -= 30
+            return score
+        content_models = [m for m in models if 'generateContent' in [method.name for method in m.supported_generation_methods]]
+        return sorted(content_models, key=calc_score, reverse=True)
+    except: return []
+
+def analyze_with_gemini(api_key: str, data: Dict) -> tuple:
+    if not api_key: return "⚠️ Gemini API 키가 설정되지 않았습니다.", "", ""
+    try:
+        genai.configure(api_key=api_key)
+        sorted_models = get_sorted_models(genai)
+        if not sorted_models: return "⚠️ 사용 가능한 Gemini 모델이 없습니다.", "", ""
+        model = genai.GenerativeModel(sorted_models[0].name.replace('models/', ''))
+        
+        s1, s2, s3 = data.get('stage1') or {}, data.get('stage2') or {}, data.get('stage3') or {}
+        has_s3 = bool(s3 and any(s3.values()))
+        
+        # 과거 승인 사례 조회 (AI 학습용)
+        past_cases = get_past_approvals(s1.get('industry', ''), 5)
+        past_text = ""
+        if past_cases:
+            past_text = "\n\n[과거 유사 업종 승인 사례]\n"
+            for i, c in enumerate(past_cases, 1):
+                match = "✓" if c.get('ai_match') == 'Y' else ("✗" if c.get('ai_match') == 'N' else "")
+                past_text += f"{i}. {c.get('industry','-')} | {c.get('policy_name','-')} | {c.get('approved_amount','-')}만원 {match}\n"
+        
+        if has_s3:
+            prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
+아래 고객 정보를 분석하여 **최종 실행 전략**을 제시해주세요.
+
+[고객 기본 정보]
+- 업종: {s1.get('industry', '-')}, 사업형태: {s1.get('business_type', '-')}, 직원수: {s1.get('employee_count', '-')}, 필요자금: {s1.get('funding_amount', '-')}
+
+[재무 현황]
+- 매출: {s2.get('revenue_y1', '-')}만원(올해), {s2.get('revenue_y2', '-')}만원(전년)
+- 자본금: {s2.get('capital_amount', '-')}만원, 부채: {s2.get('debt_amount', '-')}만원
+
+[심층 분석]
+- 담보/보증: {s3.get('collateral_profile', '-')}, 리스크: {s3.get('risk_top3', '-')}
+{past_text}
+
+다음을 포함한 **최종 실행 전략**:
+1. 승인 가능성 (상/중/하)
+2. 추천 정책자금 3개
+3. 예상 승인 한도 (만원)
+4. 필요 서류, 5. 실행 로드맵
+
+※ 마지막에 반드시:
+[AI추천요약]
+- 1순위 정책자금: (정책자금명)
+- 예상 승인금액: (만원)"""
+        else:
+            prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
+아래 고객 정보를 분석하여 **계약 심사 의견**을 제시해주세요.
+
+[고객 기본 정보]
+- 업종: {s1.get('industry', '-')}, 사업형태: {s1.get('business_type', '-')}, 필요자금: {s1.get('funding_amount', '-')}
+- 세금체납: {s1.get('tax_status', '-')}, 금융연체: {s1.get('credit_status', '-')}
+
+[재무 현황]
+- 매출: {s2.get('revenue_y1', '-')}만원, 자본금: {s2.get('capital_amount', '-')}만원, 부채: {s2.get('debt_amount', '-')}만원
+{past_text}
+
+다음을 포함한 **계약 심사 의견**:
+1. 수임 판정 (적합/보류/부적합)
+2. 예상 정책자금 2-3개
+3. 예상 승인 금액 (만원)
+4. 유의사항
+
+※ 마지막에 반드시:
+[AI추천요약]
+- 1순위 정책자금: (정책자금명)
+- 예상 승인금액: (만원)"""
+        
+        response = model.generate_content(prompt)
+        result_text = response.text
+        
+        # AI 추천 정보 파싱
+        ai_policy, ai_amount = "", ""
+        m1 = re.search(r'1순위.*?정책자금[:\s]*([^\n]+)', result_text)
+        if m1: ai_policy = re.sub(r'^[-:*\s]+', '', m1.group(1).strip())
+        m2 = re.search(r'예상.*?승인.*?금액[:\s]*([0-9,]+)', result_text)
+        if m2: ai_amount = m2.group(1).replace(',', '')
+        
+        return result_text, ai_policy, ai_amount
+    except Exception as e:
+        return f"⚠️ AI 분석 오류: {str(e)}", "", ""
+
+# ==============================
+# 6. 리포트 생성
+# ==============================
+def generate_full_report(data: Dict, ai_result: str, mode: str) -> str:
+    s1, s2, s3 = data.get('stage1') or {}, data.get('stage2') or {}, data.get('stage3') or {}
+    return f"""
+================================================================================
+                     유아플랜 정책자금 컨설팅 리포트
+================================================================================
+생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+접수번호: {data.get('receipt_no', '-')}
+분석유형: {'최종 실행 전략' if mode == 'execution' else '계약 심사'}
+
+[1] 고객 정보
+- 고객명: {s1.get('name', '-')}, 업종: {s1.get('industry', '-')}, 필요자금: {s1.get('funding_amount', '-')}
+
+[2] 재무 현황
+- 매출: {s2.get('revenue_y1', '-')}만원, 자본금: {s2.get('capital_amount', '-')}만원, 부채: {s2.get('debt_amount', '-')}만원
+
+[3] AI 분석 결과
+{ai_result}
+
+================================================================================
+"""
+
+PROCESS_STATUS = ["1.신규접수", "2.상담예정", "3.서류준비중", "4.기관접수완료", "5.현장실사", "6.최종승인", "7.부결/보류"]
 
 # ==============================
 # 7. UI 메인
 # ==============================
 def main():
-    # [보안] 로그인 체크
-    if not check_password():
-        st.stop()  # 비밀번호 틀리면 여기서 멈춤 (아래 내용 안 보임)
+    if not check_password(): st.stop()
 
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
     html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
-    #MainMenu, footer, header { display: none !important; }
-    [data-testid="stSidebar"] { display: none !important; }
-
-    .unified-header {
-        background: linear-gradient(135deg, #002855 0%, #1e40af 100%);
-        padding: 20px 30px;
-        border-radius: 0 0 15px 15px;
-        margin: -4rem -4rem 24px -4rem;
-        color: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
+    #MainMenu, footer, header, [data-testid="stSidebar"] { display: none !important; }
+    .unified-header { background: linear-gradient(135deg, #002855 0%, #1e40af 100%); padding: 20px 30px; border-radius: 0 0 15px 15px; margin: -4rem -4rem 24px -4rem; color: white; display: flex; justify-content: space-between; align-items: center; }
     .header-left { display: flex; align-items: center; gap: 15px; }
-    .header-left img { height: 40px; object-fit: contain; }
+    .header-left img { height: 40px; }
     .header-left h1 { margin: 0; font-size: 22px; font-weight: 700; color: white; }
-    
-    .stage-badge {
-        display: inline-block;
-        padding: 6px 16px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 600;
-    }
-    .badge-contract { background: #FEF3C7; color: #92400E; }
-    .badge-execution { background: #D1FAE5; color: #065F46; }
-    
-    .metric-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 16px;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .metric-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-    .metric-value { font-size: 24px; font-weight: 700; color: #111827; }
-    .metric-green { color: #059669; }
-    .metric-red { color: #DC2626; }
-    .metric-orange { color: #D97706; }
-    
-    .download-btn {
-        display: block;
-        text-align: center;
-        background: #002855;
-        color: white !important;
-        padding: 14px 24px;
-        border-radius: 10px;
-        text-decoration: none;
-        font-weight: 600;
-        margin-top: 20px;
-        transition: all 0.2s;
-    }
-    .download-btn:hover { background: #1e40af; }
-    
-    .chat-box {
-        background-color: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 15px;
-        max-height: 300px;
-        overflow-y: auto;
-        font-size: 14px;
-        white-space: pre-wrap;
-    }
+    .stage-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; }
+    .metric-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; text-align: center; }
+    .metric-label { font-size: 12px; color: #6b7280; }
+    .metric-value { font-size: 24px; font-weight: 700; }
+    .metric-green { color: #059669; } .metric-red { color: #DC2626; } .metric-orange { color: #D97706; }
+    .download-btn { display: block; text-align: center; background: #002855; color: white !important; padding: 14px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; margin-top: 20px; }
+    .chat-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 15px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 14px; }
+    .link-box { background: #EFF6FF; border: 2px solid #3B82F6; border-radius: 10px; padding: 16px; margin: 10px 0; }
+    .link-box code { background: white; padding: 8px 12px; border-radius: 6px; display: block; margin: 8px 0; word-break: break-all; }
+    .ai-summary-box { background: #F0FDF4; border: 2px solid #22C55E; border-radius: 10px; padding: 16px; margin: 16px 0; }
     </style>
     """, unsafe_allow_html=True)
 
-    # 헤더
     st.markdown(f"""
     <div class="unified-header">
-        <div class="header-left">
-            <img src="{LOGO_URL}" alt="Logo">
-            <h1>통합 고객 관리 대시보드</h1>
-        </div>
-        <div style="font-size:12px; opacity:0.8;">v2.3 | Secured</div>
+        <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-ai-learning</div>
     </div>
     """, unsafe_allow_html=True)
 
-    if not GEMINI_API_KEY:
-        st.error("⚠️ GEMINI_API_KEY 환경변수가 설정되지 않았습니다. Render 설정을 확인하세요.")
-        return
-
-    # ==========================================================
-    # 🚨 AI 연결
-    # ==========================================================
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        sorted_models = get_sorted_models(model_list)
-        
-        if sorted_models:
-            best_model = sorted_models[0]
-            display_model = best_model.replace('models/', '')
-            score = calculate_model_score(best_model)
-            st.toast(f"✅ AI 연결 성공: {display_model}")
-            
-            with st.expander("🏆 AI 모델 성능 순위", expanded=False):
-                st.write(f"**선택된 모델:** `{best_model}`")
-                rank_data = []
-                for idx, m in enumerate(sorted_models[:10]): 
-                    rank_data.append({"순위": f"{idx+1}위", "모델명": m.replace('models/', ''), "점수": calculate_model_score(m)})
-                st.table(rank_data)
-        else:
-            st.warning("⚠️ AI 연결 경고")
-    except Exception as e:
-        st.error(f"❌ 치명적 오류: {e}")
-        return 
-
-    # 검색바 (이름/번호 검색)
     col1, col2 = st.columns([4, 1])
-    with col1:
-        search_query = st.text_input("접수번호 또는 고객명 입력", placeholder="예: YP2025... 또는 홍길동", label_visibility="collapsed")
-    with col2:
-        search_btn = st.button("🔍 고객 조회", type="primary", use_container_width=True)
+    with col1: search_query = st.text_input("접수번호 입력", placeholder="예: YP2025...", label_visibility="collapsed")
+    with col2: search_btn = st.button("🔍 조회", type="primary", use_container_width=True)
 
     if search_btn and search_query:
-        with st.spinner("데이터 조회 중..."):
+        with st.spinner("조회 중..."):
             result = fetch_integrated_data(search_query.strip())
         
         if result.get("status") == "success":
             data = result.get("data", {})
-            s1 = data.get("stage1") or {}
-            s2 = data.get("stage2") or {}
-            s3 = data.get("stage3") or {}
+            s1, s2, s3 = data.get("stage1") or {}, data.get("stage2") or {}, data.get("stage3") or {}
             metrics = calculate_financial_metrics(s2)
-            
-            real_receipt_no = data.get('receipt_no') or s1.get('receipt_no') or search_query
+            real_receipt_no = data.get('receipt_no') or search_query
             current_notes = s3.get('coach_notes', '') if s3 else ""
             
-            # 진행 상태 파싱
             current_status = "1.신규접수"
             status_match = re.findall(r'\[STATUS_CHANGE\] .*? → (.*)', current_notes)
-            if status_match:
-                current_status = status_match[-1]
-
-            is_contracted_saved = "[계약완료]" in current_notes
-            contract_link = ""
-            link_match = re.search(r'\[CONTRACT_LINK\] (https?://[^\s]+)', current_notes)
-            if link_match: contract_link = link_match.group(1)
-
+            if status_match: current_status = status_match[-1]
+            is_contracted = "[계약완료]" in current_notes
+            has_s3 = bool(s3 and any(s3.values()))
+            
             st.markdown("---")
             col_st1, col_st2 = st.columns([3, 1])
             with col_st1:
-                if is_contracted_saved:
-                    st.markdown(f'<span class="stage-badge" style="background:#D1FAE5; color:#065F46;">✅ 계약 완료</span> <span class="stage-badge" style="background:#DBEAFE; color:#1E40AF;">📌 현재단계: {current_status}</span>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<span class="stage-badge" style="background:#FEF3C7; color:#92400E;">📝 계약 검토 중</span> <span class="stage-badge" style="background:#F3F4F6; color:#374151;">📌 현재단계: {current_status}</span>', unsafe_allow_html=True)
-            
-            # 상태 변경 (로그인한 사람만 가능)
+                badge_style = "background:#D1FAE5; color:#065F46;" if is_contracted else "background:#FEF3C7; color:#92400E;"
+                badge_text = "✅ 계약 완료" if is_contracted else "📝 검토 중"
+                st.markdown(f'<span class="stage-badge" style="{badge_style}">{badge_text}</span> <span class="stage-badge" style="background:#F3F4F6; color:#374151;">📌 {current_status}</span>', unsafe_allow_html=True)
             with col_st2:
                 with st.popover("🔄 상태 변경"):
-                    new_status = st.selectbox("진행 단계 선택", PROCESS_STATUS, index=PROCESS_STATUS.index(current_status) if current_status in PROCESS_STATUS else 0)
-                    if st.button("변경 적용"):
+                    new_status = st.selectbox("단계", PROCESS_STATUS, index=PROCESS_STATUS.index(current_status) if current_status in PROCESS_STATUS else 0)
+                    if st.button("변경"):
                         if new_status != current_status:
                             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            status_log = f"[{ts} | SYSTEM] [STATUS_CHANGE] {current_status} → {new_status}"
-                            with st.spinner("상태 업데이트 중..."):
-                                res = update_consultant_note(real_receipt_no, status_log, current_notes)
-                                if res.get('status') == 'success' or res.get('ok'):
-                                    st.success("상태가 변경되었습니다.")
-                                    st.rerun()
-                                else: st.error("업데이트 실패")
+                            res = update_consultant_note(real_receipt_no, f"[{ts} | SYSTEM] [STATUS_CHANGE] {current_status} → {new_status}", current_notes)
+                            if res: st.rerun()
 
-            client_name = s1.get('name', '고객')
-            st.markdown(f"### 📊 {client_name} 님 기업 진단 (ID: {real_receipt_no})")
+            st.markdown(f"### 📊 {s1.get('name', '고객')} 님 (ID: {real_receipt_no})")
             
-            # [직원 & CEO 섹션]
+            # 직원/대표 섹션
             col_staff, col_ceo = st.columns(2)
             with col_staff:
-                with st.expander("⚡ [직원용] 상담/설문 대리 작성", expanded=True):
-                    s1_link = f"{SURVEY1_URL}/?r={real_receipt_no}&name={s1.get('name', '')}&phone={s1.get('phone', '')}"
-                    st.link_button(f"📝 1차 상담 작성", s1_link, use_container_width=True)
-                    s2_link = f"{SURVEY2_URL}/?r={real_receipt_no}"
-                    st.link_button(f"📊 2차 심화진단 작성", s2_link, use_container_width=True)
+                with st.expander("⚡ [직원용] 상담/설문", expanded=True):
+                    st.link_button("📝 1차 상담", f"{SURVEY1_URL}/?r={real_receipt_no}", use_container_width=True)
+                    st.markdown("---")
+                    st.markdown("**📨 2차 링크 발급**")
+                    col_h, col_i = st.columns([2, 1])
+                    with col_h: hours = st.selectbox("유효시간", [6, 12, 24], index=2, format_func=lambda x: f"{x}시간", key=f"h_{real_receipt_no}")
+                    with col_i: issue_btn = st.button("🔗 발급", type="primary", use_container_width=True, key=f"i_{real_receipt_no}")
+                    if issue_btn:
+                        with st.spinner("발급 중..."):
+                            r = issue_second_survey_token(real_receipt_no, hours, "dashboard")
+                        if r.get("ok"):
+                            st.success("✅ 발급 완료!")
+                            st.markdown(f'<div class="link-box"><strong>📋 고객용 링크</strong><code>{r.get("link","")}</code><small>만료: {r.get("expires_at","-")}</small></div>', unsafe_allow_html=True)
+                            st.code(r.get("link", ""))
+                        else: st.error(f"❌ 실패: {r.get('error')}")
 
             with col_ceo:
-                with st.expander("👑 [대표용] 계약/3차 관리", expanded=True):
-                    if contract_link:
-                        st.link_button("📄 전자계약서 보기", contract_link, type="primary", use_container_width=True)
-                    
-                    with st.popover("➕ 계약서 링크 등록"):
-                        new_link = st.text_input("URL 입력")
-                        if st.button("저장"):
-                            if new_link:
-                                res = update_consultant_note(real_receipt_no, f"[CONTRACT_LINK] {new_link}", current_notes)
-                                if res: st.rerun()
+                with st.expander("👑 [대표용] 계약/3차", expanded=True):
+                    link_match = re.search(r'\[CONTRACT_LINK\] (https?://[^\s]+)', current_notes)
+                    if link_match: st.link_button("📄 전자계약서", link_match.group(1), type="primary", use_container_width=True)
+                    with st.popover("➕ 계약서 등록"):
+                        new_link = st.text_input("URL")
+                        if st.button("저장") and new_link:
+                            update_consultant_note(real_receipt_no, f"[CONTRACT_LINK] {new_link}", current_notes)
+                            st.rerun()
+                    if st.checkbox("✅ 계약 완료", value=is_contracted):
+                        st.link_button("🚀 3차 상담", f"{SURVEY3_URL}/?r={real_receipt_no}", use_container_width=True)
+                        if not is_contracted and st.button("저장"):
+                            update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | SYSTEM] ✅ [계약완료]", current_notes)
+                            st.rerun()
 
-                    contract_checked = st.checkbox("✅ 계약 완료 확인", value=is_contracted_saved)
-                    if contract_checked:
-                        s3_link = f"{SURVEY3_URL}/?r={real_receipt_no}&name={s1.get('name', '')}&phone={s1.get('phone', '')}"
-                        st.link_button(f"🚀 3차 심층 상담", s3_link, type="secondary", use_container_width=True)
-                        if not is_contracted_saved:
-                            if st.button("계약상태 저장"):
-                                ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                                res = update_consultant_note(real_receipt_no, f"[{ts} | SYSTEM] ✅ [계약완료] 처리됨", current_notes)
-                                if res: st.rerun()
-
-            # ... (지표 및 탭 코드는 동일, 생략 없이 유지) ...
+            # 지표
             st.markdown("---")
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            with col_m1:
-                st.markdown(f"""<div class="metric-card"><div class="metric-label">업종</div><div class="metric-value" style="font-size:16px;">{s1.get('industry', '-')}</div></div>""", unsafe_allow_html=True)
-            with col_m2:
-                growth_class = "metric-green" if metrics['growth_status'] == 'green' else ("metric-red" if metrics['growth_status'] == 'red' else "")
-                st.markdown(f"""<div class="metric-card"><div class="metric-label">매출 성장률</div><div class="metric-value {growth_class}">{metrics['growth_rate']}</div></div>""", unsafe_allow_html=True)
-            with col_m3:
-                debt_class = "metric-green" if metrics['debt_status'] == 'green' else ("metric-red" if metrics['debt_status'] == 'red' else "metric-orange")
-                st.markdown(f"""<div class="metric-card"><div class="metric-label">부채비율</div><div class="metric-value {debt_class}">{metrics['debt_ratio']}</div></div>""", unsafe_allow_html=True)
-            with col_m4:
-                risk_status = "⚠️ 주의" if s1.get('tax_status') != "체납 없음" or s1.get('credit_status') != "연체 없음" else "✅ 양호"
-                risk_class = "metric-red" if "주의" in risk_status else "metric-green"
-                st.markdown(f"""<div class="metric-card"><div class="metric-label">리스크</div><div class="metric-value {risk_class}" style="font-size:18px;">{risk_status}</div></div>""", unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns(4)
+            with c1: st.markdown(f'<div class="metric-card"><div class="metric-label">업종</div><div class="metric-value" style="font-size:16px">{s1.get("industry","-")}</div></div>', unsafe_allow_html=True)
+            with c2: st.markdown(f'<div class="metric-card"><div class="metric-label">성장률</div><div class="metric-value metric-{"green" if metrics["growth_status"]=="green" else ("red" if metrics["growth_status"]=="red" else "")}">{metrics["growth_rate"]}</div></div>', unsafe_allow_html=True)
+            with c3: st.markdown(f'<div class="metric-card"><div class="metric-label">부채비율</div><div class="metric-value metric-{metrics["debt_status"]}">{metrics["debt_ratio"]}</div></div>', unsafe_allow_html=True)
+            with c4:
+                risk = "⚠️ 주의" if s1.get('tax_status') != "체납 없음" or s1.get('credit_status') != "연체 없음" else "✅ 양호"
+                st.markdown(f'<div class="metric-card"><div class="metric-label">리스크</div><div class="metric-value metric-{"red" if "주의" in risk else "green"}" style="font-size:18px">{risk}</div></div>', unsafe_allow_html=True)
 
-            st.markdown("---")
-            with st.expander("📂 상세 데이터 보기 (랜딩/1차/2차/3차)", expanded=False):
-                tab1, tab2, tab3 = st.tabs(["1차 (기본/랜딩)", "2차 (심화/재무)", "3차 (심층/전문가)"])
-                with tab1:
-                    if s1:
-                        c1, c2 = st.columns(2)
-                        c1.write(f"**고객명:** {s1.get('name', '-')}")
-                        c1.write(f"**연락처:** {s1.get('phone', '-')}")
-                        c2.write(f"**업종:** {s1.get('industry', '-')}")
-                        c2.write(f"**필요자금:** {s1.get('funding_amount', '-')}")
-                    else: st.info("데이터 없음")
-                with tab2:
-                    if s2:
-                        c1, c2 = st.columns(2)
-                        c1.write(f"**사업자명:** {s2.get('business_name', '-')}")
-                        c1.write(f"**매출:** {s2.get('revenue_y1', '-')}")
-                        c2.write(f"**자본금:** {s2.get('capital_amount', '-')}")
-                        c2.write(f"**부채:** {s2.get('debt_amount', '-')}")
-                    else: st.info("데이터 없음")
-                with tab3:
-                    if s3:
-                        st.write(f"**담보/보증:** {s3.get('collateral_profile', '-')}")
-                        st.write(f"**메모:** {s3.get('coach_notes', '-')}")
-                    else: st.info("데이터 없음")
+            # 상세 데이터
+            with st.expander("📂 상세 데이터", expanded=False):
+                t1, t2, t3 = st.tabs(["1차", "2차", "3차"])
+                with t1:
+                    if s1: st.write(f"**고객명:** {s1.get('name')}, **업종:** {s1.get('industry')}, **필요자금:** {s1.get('funding_amount')}")
+                    else: st.info("없음")
+                with t2:
+                    if s2: st.write(f"**사업자명:** {s2.get('business_name')}, **매출:** {s2.get('revenue_y1')}만원")
+                    else: st.info("없음")
+                with t3:
+                    if s3: st.write(f"**담보:** {s3.get('collateral_profile')}")
+                    else: st.info("없음")
 
-            # 내부 소통 (메모장)
+            # 소통 로그
             st.markdown("---")
-            with st.expander(f"📢 [{client_name}] 님 관련 소통 로그", expanded=True):
-                display_notes = current_notes.replace("[CONTRACT_LINK]", "📄 계약서:").replace("[STATUS_CHANGE]", "🔄 상태변경:")
-                if not display_notes: display_notes = "(기록 없음)"
-                st.markdown(f"""<div class="chat-box">{display_notes}</div>""", unsafe_allow_html=True)
-                
-                st.write("")
-                c_w, c_i = st.columns([1, 4])
-                with c_w: w = st.selectbox("작성자", ["직원", "대표"], key="w")
-                with c_i: n = st.text_input("내용", key="n")
-                if st.button("등록"):
-                    if n:
-                        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        res = update_consultant_note(real_receipt_no, f"[{ts} | {w}] {n}", current_notes)
-                        if res: st.rerun()
+            with st.expander(f"📢 소통 로그", expanded=True):
+                display = current_notes.replace("[CONTRACT_LINK]", "📄").replace("[STATUS_CHANGE]", "🔄") or "(없음)"
+                st.markdown(f'<div class="chat-box">{display}</div>', unsafe_allow_html=True)
+                cw, ci = st.columns([1, 4])
+                with cw: w = st.selectbox("작성자", ["직원", "대표"], key="w")
+                with ci: n = st.text_input("내용", key="n")
+                if st.button("등록") and n:
+                    update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | {w}] {n}", current_notes)
+                    st.rerun()
 
-            # AI 분석 및 다운로드
+            # AI 분석
             st.markdown("---")
-            st.subheader("🤖 AI 최종 실행 전략")
-            ai_output = analyze_with_gemini(GEMINI_API_KEY, data)
+            st.subheader("🤖 AI 분석")
+            ai_output, ai_policy, ai_amount = analyze_with_gemini(GEMINI_API_KEY, data)
             st.markdown(ai_output)
+            
+            if ai_policy or ai_amount:
+                st.markdown(f'<div class="ai-summary-box"><strong>🎯 AI 추천</strong><br>- 1순위: <strong>{ai_policy or "-"}</strong><br>- 예상금액: <strong>{ai_amount or "-"}만원</strong></div>', unsafe_allow_html=True)
+                st.session_state['ai_policy'] = ai_policy
+                st.session_state['ai_amount'] = ai_amount
             
             if ai_output and not ai_output.startswith("⚠️"):
                 mode = "execution" if has_s3 else "contract"
-                full_text = generate_full_report(data, ai_output, mode)
-                btn_label = "📥 최종 리포트 다운로드"
-                filename = f"유아플랜_{real_receipt_no}.txt"
-                b64 = base64.b64encode(full_text.encode()).decode()
-                st.markdown(f'<a href="data:text/plain;base64,{b64}" download="{filename}" class="download-btn">{btn_label}</a>', unsafe_allow_html=True)
+                report = generate_full_report(data, ai_output, mode)
+                b64 = base64.b64encode(report.encode()).decode()
+                st.markdown(f'<a href="data:text/plain;base64,{b64}" download="유아플랜_{real_receipt_no}.txt" class="download-btn">📥 리포트 다운로드</a>', unsafe_allow_html=True)
 
+            # 결과 저장 (대표 전용)
+            st.markdown("---")
+            st.subheader("💰 정책자금 결과 저장 (대표 전용)")
+            st.caption("실제 승인 결과를 저장하면 AI 정확도가 향상됩니다.")
+            
+            # 대표 비번 검증
+            if "result_unlocked" not in st.session_state:
+                st.session_state.result_unlocked = False
+            
+            if not st.session_state.result_unlocked:
+                col_pw1, col_pw2 = st.columns([3, 1])
+                with col_pw1:
+                    result_pw_input = st.text_input("🔐 대표 비밀번호", type="password", key="result_pw_input")
+                with col_pw2:
+                    if st.button("확인", key="result_pw_btn"):
+                        if result_pw_input == RESULT_PASSWORD:
+                            st.session_state.result_unlocked = True
+                            st.rerun()
+                        else:
+                            st.error("비밀번호가 틀렸습니다.")
+            else:
+                with st.form("result_form"):
+                    cr1, cr2 = st.columns(2)
+                    with cr1: policy = st.text_input("승인된 정책자금명", placeholder="예: 벤처기업정책자금")
+                    with cr2: amount = st.text_input("승인 금액(만원)", placeholder="예: 50000")
+                    memo = st.text_area("메모", placeholder="특이사항")
+                    st.caption(f"📌 AI 추천: {st.session_state.get('ai_policy', '-')} / {st.session_state.get('ai_amount', '-')}만원")
+                    
+                    if st.form_submit_button("💾 저장", type="primary"):
+                        if policy and amount:
+                            with st.spinner("저장 중..."):
+                                r = save_policy_result(real_receipt_no, policy, amount, memo, st.session_state.get('ai_policy', ''), st.session_state.get('ai_amount', ''))
+                            if r.get('status') == 'success':
+                                match = "✅ AI 일치!" if r.get('ai_match') == 'Y' else ("❌ AI 불일치" if r.get('ai_match') == 'N' else "")
+                                st.success(f"저장 완료! {match}")
+                            else: st.error(f"실패: {r.get('message')}")
+                        else: st.warning("정책자금명과 금액을 입력하세요.")
         else:
-            st.error(f"❌ 조회 실패: {result.get('message', '알 수 없는 오류')}")
-    
+            st.error(f"❌ 조회 실패: {result.get('message')}")
     elif search_btn:
-        st.warning("접수번호를 입력해주세요.")
+        st.warning("접수번호를 입력하세요.")
 
 if __name__ == "__main__":
     main()
