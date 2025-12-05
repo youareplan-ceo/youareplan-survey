@@ -97,6 +97,7 @@ def inject_facebook_pixel(event_name="PageView", custom_data=None, event_id=None
 def send_meta_event(event_name, user_data=None, event_id=None):
     """
     Meta Conversions API (서버 사이드 전송)
+    업데이트: 전화번호(ph) 뿐만 아니라 이름(fn)도 해싱하여 전송
     """
     if not META_ACCESS_TOKEN:
         return None
@@ -108,6 +109,7 @@ def send_meta_event(event_name, user_data=None, event_id=None):
     
     hashed_user_data = {}
     if user_data:
+        # 1. 전화번호 해싱 (ph)
         if 'phone' in user_data:
             raw_phone = re.sub(r"[^0-9]", "", str(user_data['phone']))
             if raw_phone:
@@ -116,6 +118,13 @@ def send_meta_event(event_name, user_data=None, event_id=None):
                 else:
                     clean_phone = '82' + raw_phone
                 hashed_user_data['ph'] = hashlib.sha256(clean_phone.encode('utf-8')).hexdigest()
+        
+        # 2. [추가됨] 이름 해싱 (fn) - 매칭 품질 향상용
+        if 'name' in user_data:
+            # 공백 제거 및 소문자 변환 (Meta 권장 규격)
+            raw_name = str(user_data['name']).strip().lower()
+            if raw_name:
+                hashed_user_data['fn'] = hashlib.sha256(raw_name.encode('utf-8')).hexdigest()
 
     payload = {
         "data": [{
@@ -233,11 +242,18 @@ def main():
         if not st.session_state.get('lead_pixel_fired', False):
             event_id = str(uuid.uuid4())
             
+            # 1. 브라우저 픽셀 (화면에는 안보임)
             inject_facebook_pixel("Lead", event_id=event_id)
             
+            # 2. 서버 사이드 API (CAPI) 전송 - 이름과 전화번호 모두 전송하도록 수정됨
             user_phone = st.session_state.get('submitted_phone', '')
-            if user_phone:
-                send_meta_event("Lead", {"phone": user_phone}, event_id=event_id)
+            user_name = st.session_state.get('submitted_name', '') # 저장해둔 이름 가져오기
+            
+            capi_data = {}
+            if user_phone: capi_data['phone'] = user_phone
+            if user_name: capi_data['name'] = user_name
+            
+            send_meta_event("Lead", capi_data, event_id=event_id)
                 
             st.session_state.lead_pixel_fired = True
             
@@ -256,6 +272,7 @@ def main():
             st.session_state.lead_pixel_fired = False
             st.session_state.page_view_fired = False
             st.session_state.submitted_phone = ''
+            st.session_state.submitted_name = '' # 이름 초기화
             st.rerun()
 
         # 푸터 (완료 화면)
@@ -288,15 +305,9 @@ def main():
         st.write("") 
         submitted = st.form_submit_button("📩 무료 상담 신청하기")
         
-    # =================================================================
-    # [중요 수정] form 밖으로 로직 이동
-    # indentation(들여쓰기)을 form 과 같은 레벨로 맞췄습니다.
-    # 이렇게 해야 폼 UI 렌더링 충돌 없이 처리가 가능합니다.
-    # =================================================================
     if submitted:
         phone_digits = _digits_only(phone_raw)
         
-        # 유효성 검사 경고는 폼 바로 아래에 뜹니다.
         if not name: st.warning("⚠️ 성함을 입력해주세요.")
         elif len(phone_digits) < 10: st.warning("⚠️ 연락처를 올바르게 입력해주세요.")
         elif business_type == "선택해주세요": st.warning("⚠️ 사업자 형태를 선택해주세요.")
@@ -331,6 +342,7 @@ def main():
                 st.session_state.form_submitted = True
                 st.session_state.last_receipt_no = receipt_no
                 st.session_state.submitted_phone = phone_digits
+                st.session_state.submitted_name = name # 이름도 세션에 저장
                 st.session_state.lead_pixel_fired = False 
                 st.rerun()
 
