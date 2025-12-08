@@ -18,10 +18,13 @@ SURVEY2_URL = "https://youareplan-survey2.onrender.com"
 SURVEY3_URL = "https://youareplan-survey3.onrender.com" 
 
 # ==============================
-# [보안] 접속 비밀번호 설정
+# [보안] 접속 비밀번호 & 로고 설정
 # ==============================
 ACCESS_PASSWORD = os.getenv("DASHBOARD_PW", "1234")
 RESULT_PASSWORD = os.getenv("RESULT_PW", "1234") 
+
+# [수정] Render 환경변수 'YOUAREPLAN_LOGO_URL'이 있으면 그걸 쓰고, 없으면 기본값 사용
+LOGO_URL = os.getenv("YOUAREPLAN_LOGO_URL", "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png")
 
 # ==============================
 # 1. 페이지 설정
@@ -55,10 +58,10 @@ def check_password():
         return True
 
 # ==============================
-# 2. 환경 설정 & 로고
+# 2. 환경 설정
 # ==============================
 BRAND_NAME = "유아플랜"
-LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
+# [중요] FIRST_GAS_URL 환경변수가 없으면 아래 기본값을 사용하지만, 가급적 환경변수에 설정하는 것을 권장합니다.
 INTEGRATED_GAS_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
 
@@ -376,12 +379,41 @@ def main():
     .header-left img { height: 40px; }
     .header-left h1 { margin: 0; font-size: 22px; font-weight: 700; color: white; }
     .stage-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; }
-    .metric-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; text-align: center; }
-    .metric-label { font-size: 12px; color: #6b7280; }
-    .metric-value { font-size: 24px; font-weight: 700; }
-    .metric-green { color: #059669; } .metric-red { color: #DC2626; } .metric-orange { color: #D97706; }
+    
+    /* [수정] 다크모드 대응: 배경이 흰색인 요소들은 글씨를 강제로 어둡게(#1f2937) 설정 */
+    .metric-card { 
+        background: white; 
+        border: 1px solid #e5e7eb; 
+        border-radius: 12px; 
+        padding: 16px; 
+        text-align: center; 
+        color: #1f2937 !important; /* 글씨 색상 강제 */
+    }
+    .metric-label { font-size: 12px; color: #6b7280 !important; }
+    .metric-value { 
+        font-size: 24px; 
+        font-weight: 700; 
+        color: #111827 !important; /* 숫자 색상 강제 */
+    }
+    
+    .metric-green { color: #059669 !important; } 
+    .metric-red { color: #DC2626 !important; } 
+    .metric-orange { color: #D97706 !important; }
+    
     .download-btn { display: block; text-align: center; background: #002855; color: white !important; padding: 14px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; margin-top: 20px; }
-    .chat-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 15px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 14px; }
+    
+    /* [수정] 소통 로그 박스 다크모드 대응 */
+    .chat-box { 
+        background: #f9fafb; 
+        border: 1px solid #e5e7eb; 
+        border-radius: 10px; 
+        padding: 15px; 
+        max-height: 300px; 
+        overflow-y: auto; 
+        white-space: pre-wrap; 
+        font-size: 14px; 
+        color: #1f2937 !important; /* 글씨 색상 강제 (진한 회색) */
+    }
     
     /* [수정] 링크 박스 스타일 및 가독성 개선 */
     .link-box { 
@@ -419,7 +451,7 @@ def main():
     st.markdown(f"""
     <div class="unified-header">
         <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
-        <div style="font-size: 12px; opacity: 0.8;">v2025-12-04-Stable</div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-08-Stable</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -468,7 +500,7 @@ def main():
                             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
                             res = update_consultant_note(real_receipt_no, f"[{ts} | SYSTEM] [STATUS_CHANGE] {current_status} → {new_status}", current_notes)
                             if res: 
-                                st.session_state.search_result = None
+                                st.session_state.search_result = fetch_integrated_data(real_receipt_no)
                                 st.rerun()
 
             st.markdown(f"### 📊 {s1.get('name', '고객')} 님 (ID: {real_receipt_no})")
@@ -503,13 +535,13 @@ def main():
                         new_link = st.text_input("URL")
                         if st.button("저장") and new_link:
                             update_consultant_note(real_receipt_no, f"[CONTRACT_LINK] {new_link}", current_notes)
-                            st.session_state.search_result = None
+                            st.session_state.search_result = fetch_integrated_data(real_receipt_no)
                             st.rerun()
                     if st.checkbox("✅ 계약 완료", value=is_contracted):
                         st.link_button("🚀 3차 상담", f"{SURVEY3_URL}/?r={real_receipt_no}", use_container_width=True)
                         if not is_contracted and st.button("저장"):
                             update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | SYSTEM] ✅ [계약완료]", current_notes)
-                            st.session_state.search_result = None
+                            st.session_state.search_result = fetch_integrated_data(real_receipt_no)
                             st.rerun()
 
             # [핵심] API 호출 로직은 레이아웃 밖에서 처리 (안정성 확보)
@@ -601,16 +633,23 @@ def main():
                         st.info("아직 3차 상담 전입니다.")
 
             st.markdown("---")
+            
+            # ✅ [수정] 소통 로그 - st.form 사용으로 엔터키 전송 + 입력창 자동 비움 + 데이터 유지
             with st.expander(f"📢 소통 로그", expanded=True):
                 display = current_notes.replace("[CONTRACT_LINK]", "📄").replace("[STATUS_CHANGE]", "🔄") or "(없음)"
                 st.markdown(f'<div class="chat-box">{display}</div>', unsafe_allow_html=True)
-                cw, ci = st.columns([1, 4])
-                with cw: w = st.selectbox("작성자", ["직원", "대표"], key="w")
-                with ci: n = st.text_input("내용", key="n")
-                if st.button("등록") and n:
-                    update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | {w}] {n}", current_notes)
-                    st.session_state.search_result = None
-                    st.rerun()
+                
+                with st.form(key="chat_form", clear_on_submit=True):
+                    cw, ci = st.columns([1, 4])
+                    with cw: 
+                        w = st.selectbox("작성자", ["직원", "대표"])
+                    with ci: 
+                        n = st.text_input("내용", placeholder="엔터로 전송")
+                    
+                    if st.form_submit_button("등록") and n:
+                        update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | {w}] {n}", current_notes)
+                        st.session_state.search_result = fetch_integrated_data(real_receipt_no)  # ✅ 재조회로 데이터 유지
+                        st.rerun()
 
             st.markdown("---")
             st.subheader("🤖 AI 정책자금 분석")
