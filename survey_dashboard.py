@@ -357,7 +357,30 @@ def generate_full_report(data: Dict, ai_result: str, mode: str) -> str:
 PROCESS_STATUS = ["1.신규접수", "2.상담예정", "3.서류준비중", "4.기관접수완료", "5.현장실사", "6.최종승인", "7.부결/보류"]
 
 # ==============================
-# 7. UI 메인
+# 7. 콜백 함수 (버튼 클릭 시 실행)
+# ==============================
+def on_chat_submit(receipt_no, current_notes):
+    """소통 로그 등록 콜백 함수: 저장 -> 갱신 -> 초기화 순서 보장"""
+    writer = st.session_state.chat_writer
+    content = st.session_state.chat_content
+    
+    if content.strip():
+        # 1. API 호출 (저장)
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M')
+        # 상태 메시지 토스트 (성공 여부와 관계없이 시도 알림)
+        
+        # 2. 저장 실행
+        update_consultant_note(receipt_no, f"[{ts} | {writer}] {content}", current_notes)
+        
+        # 3. 데이터 갱신 (화면 유지의 핵심)
+        updated_data = fetch_integrated_data(receipt_no)
+        st.session_state.search_result = updated_data
+        
+        # 4. 입력창 초기화
+        st.session_state.chat_content = ""
+
+# ==============================
+# 8. UI 메인
 # ==============================
 def main():
     if not check_password(): st.stop()
@@ -451,7 +474,7 @@ def main():
     st.markdown(f"""
     <div class="unified-header">
         <div class="header-left"><img src="{LOGO_URL}" alt="로고"><h1>📊 유아플랜 통합 관리 대시보드</h1></div>
-        <div style="font-size: 12px; opacity: 0.8;">v2025-12-08-Stable</div>
+        <div style="font-size: 12px; opacity: 0.8;">v2025-12-08-Stable-Fix2</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -634,22 +657,21 @@ def main():
 
             st.markdown("---")
             
-            # ✅ [수정] 소통 로그 - st.form 사용으로 엔터키 전송 + 입력창 자동 비움 + 데이터 유지
+            # ✅ [수정] 콜백 방식을 적용하여 화면 리셋 방지 및 엔터키 전송 구현
             with st.expander(f"📢 소통 로그", expanded=True):
                 display = current_notes.replace("[CONTRACT_LINK]", "📄").replace("[STATUS_CHANGE]", "🔄") or "(없음)"
                 st.markdown(f'<div class="chat-box">{display}</div>', unsafe_allow_html=True)
                 
-                with st.form(key="chat_form", clear_on_submit=True):
+                # st.form을 사용하되 clear_on_submit=False로 설정하고 콜백에서 수동 초기화
+                with st.form("chat_form"):
                     cw, ci = st.columns([1, 4])
                     with cw: 
-                        w = st.selectbox("작성자", ["직원", "대표"])
+                        st.selectbox("작성자", ["직원", "대표"], key="chat_writer")
                     with ci: 
-                        n = st.text_input("내용", placeholder="엔터로 전송")
+                        st.text_input("내용", key="chat_content", placeholder="엔터로 전송")
                     
-                    if st.form_submit_button("등록") and n:
-                        update_consultant_note(real_receipt_no, f"[{datetime.now().strftime('%Y-%m-%d %H:%M')} | {w}] {n}", current_notes)
-                        st.session_state.search_result = fetch_integrated_data(real_receipt_no)  # ✅ 재조회로 데이터 유지
-                        st.rerun()
+                    # 버튼 클릭 시 on_chat_submit 콜백 함수 실행 (args로 필요 데이터 전달)
+                    st.form_submit_button("등록", on_click=on_chat_submit, args=(real_receipt_no, current_notes))
 
             st.markdown("---")
             st.subheader("🤖 AI 정책자금 분석")
