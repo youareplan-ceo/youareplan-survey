@@ -503,33 +503,47 @@ def get_best_gemini_model() -> str:
     return "gemini-1.5-flash"
 
 def call_gemini_analysis(doc_content: str) -> Dict[str, Any]:
+    """Gemini API로 분석 실행 (System Instruction 적용 버전)"""
     if not GEMINI_API_KEY:
         return {"ok": False, "error": "GEMINI_API_KEY가 설정되지 않았습니다."}
     
     best_model = get_best_gemini_model()
     
+    # 1. 시스템 프롬프트 정의 (AI의 페르소나 및 규칙 설정)
+    system_instruction_text = """
+**역할(Role):**
+당신은 '유아플랜'의 수석 정책자금 컨설턴트이자 심사역입니다.
+제공된 고객의 재무 데이터, 신용 상태, 사업 이력을 냉철하게 분석하여 실현 가능한 자금을 제안해야 합니다.
+
+**지침(Guidelines):**
+1. 매출액보다는 '상환 능력'과 '사업의 지속성'을 중심으로 평가하십시오.
+2. '세금 체납', '연체 이력'이 있다면 승인 가능성을 낮게 평가하고 해결책을 먼저 제시하십시오.
+3. 반드시 [종합 요약] -> [추천 자금 TOP 3] -> [승인 가능성 및 리스크] -> [준비 서류 가이드] 순서로 작성하십시오.
+4. 전문적이고 현실적인 조언을 제공하십시오.
+5. 희망 고문보다는 냉정한 현실 분석을 우선하십시오.
+"""
+
+    # 2. 사용자 프롬프트 (실제 분석할 데이터만 전달)
+    user_prompt = f"""
+아래 고객 정보를 바탕으로 심층 분석 보고서를 작성해주세요.
+
+[고객 정보 데이터]
+{doc_content}
+"""
+    
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{best_model}:generateContent?key={GEMINI_API_KEY}"
         
-        prompt = f"""당신은 한국 중소기업 정책자금 전문 컨설턴트입니다.
-아래 고객 정보를 분석하고, 적합한 정책자금을 추천해주세요.
-
-[고객 정보]
-{doc_content}
-
-[분석 요청사항]
-1. 고객 현황 요약 (강점/약점)
-2. 적합한 정책자금 TOP 3 추천 (구체적인 프로그램명, 지원기관, 예상 한도)
-3. 신청 시 주의사항
-4. 승인 가능성 평가 (높음/중간/낮음) 및 근거
-5. 추가로 준비해야 할 서류나 조건
-
-한국어로 명확하고 실용적으로 답변해주세요."""
-
+        # payload 구조: system_instruction 분리 적용
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "system_instruction": {
+                "parts": [{"text": system_instruction_text}]
+            },
+            "contents": [{
+                "parts": [{"text": user_prompt}]
+            }],
             "generationConfig": {
-                "temperature": 0.3,
+                "temperature": 0.4,
                 "maxOutputTokens": 4096
             }
         }
@@ -537,7 +551,7 @@ def call_gemini_analysis(doc_content: str) -> Dict[str, Any]:
         response = requests.post(url, json=payload, timeout=60)
         
         if response.status_code != 200:
-            return {"ok": False, "error": f"API 오류: HTTP {response.status_code}"}
+            return {"ok": False, "error": f"API 오류: HTTP {response.status_code} - {response.text[:200]}"}
         
         result = response.json()
         
@@ -549,7 +563,7 @@ def call_gemini_analysis(doc_content: str) -> Dict[str, Any]:
                 analysis_text = parts[0].get("text", "")
                 return {"ok": True, "analysis": analysis_text, "model": best_model}
         
-        return {"ok": False, "error": "응답 파싱 실패"}
+        return {"ok": False, "error": "응답 파싱 실패 (내용 없음)"}
         
     except requests.exceptions.Timeout:
         return {"ok": False, "error": "API 응답 시간 초과 (60초)"}
