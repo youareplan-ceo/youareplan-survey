@@ -1057,6 +1057,23 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
+    # 1차 설문 링크 (신규 고객용)
+    SURVEY1_URL = "https://youareplan-survey.onrender.com"
+    with st.expander("📋 1차 설문 링크 (신규 고객/광고용)", expanded=False):
+        st.markdown(f"""
+        <div class="link-box">
+            <strong>📎 신규 고객 1차 설문 링크</strong><br>
+            <a href="{SURVEY1_URL}" target="_blank">{SURVEY1_URL}</a>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.code(SURVEY1_URL, language=None)
+        with col_s2:
+            kakao_msg_1 = f"[유아플랜] 정책자금 상담 신청 링크입니다.\n{SURVEY1_URL}"
+            st.text_area("카카오톡 발송용", value=kakao_msg_1, height=80, key="kakao_survey1")
+    
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
