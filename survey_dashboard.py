@@ -603,7 +603,7 @@ def apply_custom_css():
     .todo-item, .radar-item { min-height: 48px; }
   }
 </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # ==============================
 # Session State 초기화
