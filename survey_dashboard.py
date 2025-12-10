@@ -1,7 +1,7 @@
 """
-유아플랜 컨설턴트 대시보드 v3.8
-- v3.7 기반 + 성능 최적화
-- fetch_all_clients 캐싱 적용 (5분 TTL)
+유아플랜 컨설턴트 대시보드 v3.8.1
+- v3.8 기반 + GAS API 파라미터 수정
+- api_token, action명 GAS와 일치하도록 수정
 - 2025-12-10 수정
 """
 
@@ -248,155 +248,96 @@ def is_female(gender_str: str) -> bool:
 # ==============================
 CUSTOM_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-html, body, [class*="css"] { font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif; }
 
-:root { 
-  --gov-navy: #002855; 
-  --gov-blue: #0B5BD3; 
-  --success: #10b981; 
-  --warning: #f59e0b; 
-  --danger: #ef4444; 
-}
+/* 기본 설정 */
+html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
+.block-container { padding: 12px 16px; max-width: 100%; }
 
-#MainMenu, footer, [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
-header [data-testid="stToolbar"] { display: none !important; }
-
-.block-container { max-width: 1600px; margin: 0 auto !important; padding: 12px; }
-
-/* 브랜드 헤더 */
-.brandbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 24px; margin-bottom: 16px;
-  background: linear-gradient(135deg, var(--gov-navy) 0%, #1e40af 100%);
-  border-radius: 12px; color: white;
-}
+/* 헤더 */
+.brandbar { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #002855 0%, #003d7a 100%); padding: 16px 24px; border-radius: 12px; margin-bottom: 16px; }
 .brandbar img { height: 48px; }
-.brandbar h1 { margin: 0; color: white; font-weight: 700; font-size: 22px; }
-.brandbar .version { font-size: 12px; opacity: 0.8; color: white; }
+.brandbar h1 { color: white; font-size: 22px; font-weight: 700; margin: 0; }
+.brandbar .version { color: rgba(255,255,255,0.8); font-size: 12px; text-align: right; }
 
-/* 오늘 할 일 카드 */
-.todo-section {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #f59e0b;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-.todo-section h3 { color: #92400e; margin: 0 0 12px 0; font-size: 16px; }
-.todo-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; margin: 6px 0;
-  background: white; border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  font-size: 14px;
-  color: #1f2937;
-}
-.todo-urgent { border-left: 4px solid #ef4444; }
-.todo-important { border-left: 4px solid #f59e0b; }
-.todo-normal { border-left: 4px solid #10b981; }
-
-/* 정책자금 레이더 */
-.radar-section {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  border: 2px solid #3b82f6;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-.radar-section h3 { color: #1e40af; margin: 0 0 12px 0; font-size: 16px; }
-.radar-item {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 12px; margin: 6px 0;
-  background: white; border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  font-size: 13px;
-  color: #1f2937;
-}
-.radar-new { border-left: 4px solid #10b981; }
-.radar-deadline { border-left: 4px solid #ef4444; }
-.radar-hot { border-left: 4px solid #f59e0b; }
-
-/* 파이프라인 카드 */
-.pipeline-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-.pipeline-card { background: white; border: 1px solid rgba(128,128,128,0.2); border-radius: 10px; padding: 16px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.pipeline-card .number { font-size: 28px; font-weight: 700; color: var(--gov-navy); }
-.pipeline-card .label { font-size: 12px; color: #6b7280; margin-top: 4px; }
-.pipeline-card .delta { font-size: 11px; color: var(--success); }
-
-/* 검색 섹션 */
-.search-section { background: rgba(128, 128, 128, 0.08); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-.search-section h3 { color: inherit; margin: 0 0 12px 0; font-size: 16px; }
-
-/* 고객 정보 카드 */
-.info-card { border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 12px; padding: 20px; margin: 12px 0; background: rgba(128, 128, 128, 0.05); }
-.info-card h4 { color: var(--gov-blue); margin: 0 0 16px 0; font-weight: 700; border-bottom: 1px solid rgba(128, 128, 128, 0.2); padding-bottom: 8px; }
-
-/* 데이터 그리드 */
-.data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0; }
-.data-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(128, 128, 128, 0.08); border-radius: 6px; border-left: 4px solid var(--gov-blue); font-size: 13px; }
-.data-label { font-weight: 600; color: inherit; }
-.data-value { color: inherit; font-weight: 500; }
-
-/* 리스크 표시 */
-.risk-high { border-left-color: var(--danger) !important; background: rgba(239, 68, 68, 0.15) !important; }
-.risk-medium { border-left-color: var(--warning) !important; background: rgba(245, 158, 11, 0.15) !important; }
-.risk-low { border-left-color: var(--success) !important; background: rgba(16, 185, 129, 0.15) !important; }
-
-/* 우대요건 표시 (v3.2 신규) */
-.benefit-yes { border-left-color: #8b5cf6 !important; background: rgba(139, 92, 246, 0.15) !important; }
-.benefit-no { border-left-color: #6b7280 !important; background: rgba(107, 114, 128, 0.08) !important; }
+/* 카드 공통 */
+.info-card, .summary-card, .todo-section, .radar-section { background: #ffffff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.info-card h4 { margin: 0 0 12px 0; color: #1e3a5f; font-size: 15px; font-weight: 600; }
+.summary-card { text-align: center; border: 1px solid #e5e7eb; }
+.summary-card .label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+.summary-card .value { font-size: 16px; font-weight: 600; color: #1e3a5f; }
+.summary-card .value.benefit-yes { color: #059669; }
+.summary-card .value.benefit-no { color: #6b7280; }
 
 /* 진행률 바 */
-.progress-container { background: rgba(128, 128, 128, 0.15); height: 16px; border-radius: 8px; overflow: hidden; position: relative; margin: 16px 0; }
-.progress-bar { height: 100%; background: linear-gradient(90deg, var(--gov-navy), var(--gov-blue)); transition: width 0.3s; }
-.progress-text { position: absolute; width: 100%; text-align: center; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+.progress-container { background: #e5e7eb; border-radius: 10px; height: 20px; position: relative; margin: 12px 0; }
+.progress-bar { background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%); height: 100%; border-radius: 10px; transition: width 0.5s ease; }
+.progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #1e3a5f; }
 
-/* 요약 카드 */
-.summary-card { background: rgba(128, 128, 128, 0.05); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 10px; padding: 16px; text-align: center; }
-.summary-card .label { font-size: 11px; color: #6b7280; margin-bottom: 6px; }
-.summary-card .value { font-size: 16px; font-weight: 700; color: var(--gov-navy); }
-
-/* 상태 뱃지 */
-.status-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px; }
-.badge-completed { background: #dcfce7; color: #166534; }
+/* 상태 배지 */
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; margin-left: 8px; }
+.badge-completed { background: #d1fae5; color: #065f46; }
 .badge-pending { background: #fef3c7; color: #92400e; }
-.badge-error { background: #fee2e2; color: #991b1b; }
+.badge-urgent { background: #fee2e2; color: #991b1b; }
+
+/* 데이터 그리드 */
+.data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.data-item { display: flex; justify-content: space-between; padding: 8px 12px; background: #f9fafb; border-radius: 8px; }
+.data-label { color: #6b7280; font-size: 13px; }
+.data-value { color: #1f2937; font-size: 13px; font-weight: 500; }
+
+/* 파이프라인 */
+.pipeline-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+.pipeline-card { text-align: center; padding: 16px; border-radius: 12px; color: white; }
+.pipeline-card .number { font-size: 32px; font-weight: 700; }
+.pipeline-card .label { font-size: 13px; opacity: 0.9; }
+.pipeline-card.total { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); }
+.pipeline-card.stage1 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.pipeline-card.stage2 { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); }
+.pipeline-card.stage3 { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+
+/* 오늘 할 일 */
+.todo-section h3, .radar-section h3 { margin: 0 0 12px 0; font-size: 15px; color: #1e3a5f; }
+.todo-item { padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+.todo-urgent { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+.todo-important { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+.todo-normal { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+
+/* 레이더 */
+.radar-item { padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.radar-hot { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #991b1b; }
+.radar-new { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); color: #1e40af; }
+.radar-normal { background: #f3f4f6; color: #374151; }
 
 /* 소통 로그 */
-.comm-log-item { background: rgba(128, 128, 128, 0.05); border-left: 3px solid var(--gov-blue); border-radius: 8px; padding: 12px 16px; margin: 8px 0; }
-.comm-log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.comm-log-author { font-weight: 600; color: var(--gov-blue); font-size: 11px; color: #6b7280; }
-.comm-log-date { font-size: 11px; color: #6b7280; }
-.comm-log-content { font-size: 14px; line-height: 1.5; }
-
-/* 링크 박스 */
-.link-box { background: rgba(128, 128, 128, 0.05); border: 1px dashed rgba(128, 128, 128, 0.3); border-radius: 8px; padding: 16px; margin: 12px 0; }
-.link-box a { color: var(--gov-blue); word-break: break-all; }
-
-/* 액션 버튼 */
-.action-btn { display: inline-block; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; transition: all 0.2s; cursor: pointer; border: none; margin: 4px; }
-.action-btn-primary { background: var(--gov-navy); color: white; }
-.action-btn-primary:hover { background: #001a38; }
-.action-btn-kakao { background: #FEE500; color: #3C1E1E; }
-.action-btn-kakao:hover { background: #e6ce00; }
+.comm-log-item { background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid #3b82f6; }
+.comm-log-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.comm-log-author { font-weight: 600; color: #1e3a5f; font-size: 13px; }
+.comm-log-date { color: #6b7280; font-size: 11px; }
+.comm-log-content { color: #374151; font-size: 13px; line-height: 1.5; }
 
 /* AI 결과 카드 */
-.ai-result-card { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #86efac; border-radius: 12px; padding: 20px; margin: 16px 0; }
-.ai-result-card h4 { color: #166534; margin: 0 0 12px 0; }
+.ai-result-card { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 12px; padding: 16px; margin: 12px 0; border: 1px solid #bfdbfe; }
+.ai-result-card h4 { margin: 0 0 12px 0; color: #1e40af; }
 
-/* 점수 표시 */
-.score-display { text-align: center; padding: 20px; }
-.score-number { font-size: 48px; font-weight: 900; color: var(--gov-navy); }
-.score-grade { font-size: 24px; font-weight: 700; margin-top: 8px; color: var(--gov-navy); }
-.score-breakdown { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
-.score-item { background: white; border-radius: 8px; padding: 12px; text-align: center; }
-.score-item-label { font-size: 11px; color: #6b7280; }
-.score-item-value { font-size: 20px; font-weight: 700; color: var(--gov-navy); }
+/* 링크 박스 */
+.link-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; margin: 8px 0; }
+.link-box a { color: #059669; word-break: break-all; }
+
+/* 버튼 */
+.action-btn { display: inline-block; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px; margin: 4px; transition: all 0.2s; }
+.action-btn-primary { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; }
+.action-btn-primary:hover { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+.action-btn-kakao { background: #fee500; color: #000000; }
+.action-btn-kakao:hover { background: #fdd800; }
+
+/* 검색 영역 */
+.search-section { background: #f8fafc; padding: 16px; border-radius: 12px; margin: 16px 0; }
+.search-section h3 { margin: 0 0 12px 0; color: #1e3a5f; font-size: 16px; }
 
 /* 고객 테이블 */
-.client-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-.client-table th { background: var(--gov-navy); color: white; padding: 10px 12px; text-align: left; font-weight: 600; }
-.client-table td { padding: 10px 12px; border-bottom: 1px solid rgba(128,128,128,0.2); }
+.client-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.client-table th { background: #f1f5f9; padding: 10px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
+.client-table td { padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155; }
 .client-table tr:hover { background: rgba(128,128,128,0.05); }
 
 /* 보안 경고 */
@@ -484,7 +425,7 @@ def create_download_link(content: str, filename: str) -> str:
     return f'<a href="data:text/plain;base64,{b64}" download="{safe_filename}" class="action-btn action-btn-primary">📥 {safe_filename}</a>'
 
 # ==============================
-# GAS API 함수
+# GAS API 함수 (v3.8.1 수정)
 # ==============================
 def fetch_integrated_data(receipt_no: str) -> Dict[str, Any]:
     """통합 고객 데이터 조회"""
@@ -493,9 +434,9 @@ def fetch_integrated_data(receipt_no: str) -> Dict[str, Any]:
         sanitized_receipt_no = sanitize_input(receipt_no, 20)
         
         params = {
-            "action": "getIntegratedData",
+            "action": "get_integrated_view",
             "receipt_no": sanitized_receipt_no,
-            "token": API_TOKEN
+            "api_token": API_TOKEN
         }
         resp = requests.get(INTEGRATED_GAS_URL, params=params, timeout=30)
         return resp.json()
@@ -519,8 +460,8 @@ def fetch_all_clients_cached(_api_token: str) -> Dict[str, Any]:
     """
     try:
         params = {
-            "action": "getAllClients",
-            "token": _api_token
+            "action": "get_all_clients",
+            "api_token": _api_token
         }
         resp = requests.get(INTEGRATED_GAS_URL, params=params, timeout=30)
         return resp.json()
@@ -532,14 +473,28 @@ def issue_survey_link(receipt_no: str, stage: int = 2) -> Dict[str, Any]:
     try:
         sanitized_receipt_no = sanitize_input(receipt_no, 20)
         
-        params = {
-            "action": "issueSurveyLink",
+        payload = {
+            "action": "issue_token",
             "receipt_no": sanitized_receipt_no,
-            "stage": stage,
-            "token": API_TOKEN
+            "hours": 24,
+            "issued_by": "dashboard",
+            "api_token": API_TOKEN
         }
-        resp = requests.get(INTEGRATED_GAS_URL, params=params, timeout=30)
-        return resp.json()
+        resp = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=30)
+        result = resp.json()
+        
+        # GAS 응답 형식을 기존 형식으로 변환
+        if result.get("ok"):
+            return {
+                "status": "success",
+                "link": result.get("link", ""),
+                "expires_at": result.get("expires_at", "")
+            }
+        else:
+            return {
+                "status": "error",
+                "message": result.get("error", "알 수 없는 오류")
+            }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -551,11 +506,11 @@ def add_comm_log(receipt_no: str, author: str, content: str) -> Dict[str, Any]:
         sanitized_content = sanitize_input(content, 2000)
         
         payload = {
-            "action": "addCommLog",
+            "action": "add_comm_log",
             "receipt_no": sanitized_receipt_no,
             "author": sanitized_author,
             "content": sanitized_content,
-            "token": API_TOKEN
+            "api_token": API_TOKEN
         }
         resp = requests.post(INTEGRATED_GAS_URL, json=payload, timeout=30)
         return resp.json()
@@ -653,10 +608,10 @@ def render_radar_section():
         </div>
         <div class="radar-item radar-new">
             <span>🆕 청년창업사관학교</span>
-            <span>1~2월 모집</span>
+            <span>1-2월 모집</span>
         </div>
-        <div class="radar-item radar-deadline">
-            <span>⏰ 신용보증기금</span>
+        <div class="radar-item radar-normal">
+            <span>💰 신용보증기금</span>
             <span>상시</span>
         </div>
     </div>
@@ -666,35 +621,28 @@ def render_radar_section():
 # 파이프라인 섹션
 # ==============================
 def render_pipeline_section(stats: Dict[str, int]):
-    """파이프라인 현황"""
+    """파이프라인 통계"""
     if not stats:
         stats = {"total": 0, "stage1_only": 0, "stage2_done": 0, "stage3_done": 0, "today_new": 0}
     
-    # 숫자값은 int로 변환하여 XSS 방지
-    total = int(stats.get('total', 0))
-    stage1 = int(stats.get('stage1_only', 0))
-    stage2 = int(stats.get('stage2_done', 0))
-    stage3 = int(stats.get('stage3_done', 0))
-    today = int(stats.get('today_new', 0))
-    
     st.markdown(f"""
     <div class="pipeline-grid">
-        <div class="pipeline-card">
-            <div class="number">{total}</div>
+        <div class="pipeline-card total">
+            <div class="number">{stats.get('total', 0)}</div>
             <div class="label">전체 고객</div>
         </div>
-        <div class="pipeline-card">
-            <div class="number">{stage1}</div>
+        <div class="pipeline-card stage1">
+            <div class="number">{stats.get('stage1_only', 0)}</div>
             <div class="label">1차 완료</div>
         </div>
-        <div class="pipeline-card">
-            <div class="number">{stage2}</div>
+        <div class="pipeline-card stage2">
+            <div class="number">{stats.get('stage2_done', 0)}</div>
             <div class="label">2차 완료</div>
         </div>
-        <div class="pipeline-card">
-            <div class="number">{stage3}</div>
+        <div class="pipeline-card stage3">
+            <div class="number">{stats.get('stage3_done', 0)}</div>
             <div class="label">3차 완료</div>
-            <div class="delta">+{today} 오늘</div>
+            <div style="font-size: 11px; opacity: 0.8;">+{stats.get('today_new', 0)} 오늘</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1274,7 +1222,7 @@ def main():
             <h1>📊 유아플랜 컨설턴트 대시보드</h1>
         </div>
         <div class="version">
-            <div>v3.8</div>
+            <div>v3.8.1</div>
             <div style="font-size: 11px; opacity: 0.7;">{safe_html(current_time)}</div>
         </div>
     </div>
@@ -1293,7 +1241,7 @@ def main():
         with st.spinner("📊 데이터 로딩..."):
             # [v3.8] 캐싱된 함수 호출
             result = fetch_all_clients_cached(API_TOKEN)
-            if result.get("status") == "success":
+            if result.get("ok"):
                 st.session_state.all_clients = result.get("data", [])
                 st.session_state.pipeline_stats = calculate_pipeline_stats(st.session_state.all_clients)
             st.session_state.all_clients_loaded = True
