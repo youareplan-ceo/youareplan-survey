@@ -289,6 +289,7 @@ header [data-testid="stToolbar"] { display: none !important; }
   background: white; border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   font-size: 14px;
+  color: #1f2937;
 }
 .todo-urgent { border-left: 4px solid #ef4444; }
 .todo-important { border-left: 4px solid #f59e0b; }
@@ -309,6 +310,7 @@ header [data-testid="stToolbar"] { display: none !important; }
   background: white; border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   font-size: 13px;
+  color: #1f2937;
 }
 .radar-new { border-left: 4px solid #10b981; }
 .radar-deadline { border-left: 4px solid #ef4444; }
@@ -385,7 +387,7 @@ header [data-testid="stToolbar"] { display: none !important; }
 /* 점수 표시 */
 .score-display { text-align: center; padding: 20px; }
 .score-number { font-size: 48px; font-weight: 900; color: var(--gov-navy); }
-.score-grade { font-size: 24px; font-weight: 700; margin-top: 8px; }
+.score-grade { font-size: 24px; font-weight: 700; margin-top: 8px; color: var(--gov-navy); }
 .score-breakdown { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
 .score-item { background: white; border-radius: 8px; padding: 12px; text-align: center; }
 .score-item-label { font-size: 11px; color: #6b7280; }
@@ -1362,6 +1364,7 @@ def main():
             
             with st.spinner("🔄 조회 중..."):
                 st.session_state.search_result = fetch_integrated_data(sanitized_input)
+            st.rerun()
     
     # ========== 조회 결과 ==========
     if st.session_state.search_result:
@@ -1434,6 +1437,9 @@ def main():
         
         elif result.get("status") == "error":
             st.error(f"❌ 조회 실패: {safe_html(result.get('message'))}")
+        else:
+            # 디버깅: 예상치 못한 응답
+            st.warning(f"⚠️ 예상치 못한 응답: {result}")
     
     elif search_clicked and not receipt_no_input:
         st.warning("⚠️ 접수번호를 입력해주세요.")
