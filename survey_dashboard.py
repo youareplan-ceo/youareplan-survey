@@ -250,7 +250,7 @@ CUSTOM_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
 
 /* 기본 설정 */
-html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
+html, body, .stApp, .stMarkdown, .stText { font-family: 'Noto Sans KR', sans-serif; }
 .block-container { padding: 12px 16px; max-width: 100%; }
 
 /* 헤더 */
