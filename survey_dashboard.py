@@ -1,8 +1,8 @@
 """
-유아플랜 컨설턴트 대시보드 v3.8.1
-- v3.8 기반 + GAS API 파라미터 수정
-- api_token, action명 GAS와 일치하도록 수정
-- 2025-12-10 수정
+유아플랜 컨설턴트 대시보드 v3.8.2
+- v3.8.1 기반 + 1차 설문 링크 발급 기능 추가
+- 랜딩 접수번호 → 1차 상세 설문 연결 링크 생성
+- 2025-12-13 수정
 """
 
 import streamlit as st
@@ -15,6 +15,7 @@ import os
 import re
 import io
 import html
+import urllib.parse
 
 # ==============================
 # PDF 라이브러리 체크
@@ -773,16 +774,32 @@ def render_stage_card(title: str, data: Optional[Dict], stage: int):
     st.markdown("</div></div>", unsafe_allow_html=True)
 
 # ==============================
-# 링크 발급 섹션
+# 링크 발급 섹션 (v3.8.2 수정 - 1차 설문 링크 추가)
 # ==============================
-def render_link_issue_section(receipt_no: str, customer_name: str):
-    """설문 링크 발급"""
+def render_link_issue_section(receipt_no: str, customer_name: str, customer_phone: str = ""):
+    """설문 링크 발급 (1차/2차/3차)"""
     st.markdown("### 🔗 설문 링크 발급")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
+    # [v3.8.2 신규] 1차 설문 링크 (토큰 불필요, 단순 URL 파라미터)
     with col1:
-        if st.button("📝 2차 설문 링크 발급", type="primary", use_container_width=True):
+        if st.button("📝 1차 설문 링크 생성", use_container_width=True):
+            # URL 파라미터 구성
+            params = {"r": receipt_no}
+            if customer_name and customer_name != "-":
+                params["name"] = customer_name
+            if customer_phone and customer_phone != "-":
+                # 전화번호에서 하이픈 제거
+                clean_phone = customer_phone.replace("-", "")
+                params["phone"] = clean_phone
+            
+            link = f"{FIRST_SURVEY_URL}?{urllib.parse.urlencode(params)}"
+            st.session_state.issued_link = {"stage": 1, "link": link}
+            st.success("✅ 1차 설문 링크 생성 완료!")
+    
+    with col2:
+        if st.button("📑 2차 설문 링크 발급", type="primary", use_container_width=True):
             with st.spinner("링크 생성 중..."):
                 result = issue_survey_link(receipt_no, 2)
                 if result.get("status") == "success":
@@ -792,7 +809,7 @@ def render_link_issue_section(receipt_no: str, customer_name: str):
                 else:
                     st.error(f"❌ 실패: {safe_html(result.get('message'))}")
     
-    with col2:
+    with col3:
         if st.button("📋 3차 설문 링크 발급", use_container_width=True):
             with st.spinner("링크 생성 중..."):
                 result = issue_survey_link(receipt_no, 3)
@@ -808,9 +825,13 @@ def render_link_issue_section(receipt_no: str, customer_name: str):
         link_info = st.session_state.issued_link
         safe_link = safe_html(link_info['link'])
         stage_num = int(link_info['stage'])
+        
+        # 1차는 상세 설문, 2차/3차는 기존 표현
+        stage_label = "1차 상세 설문" if stage_num == 1 else f"{stage_num}차 설문"
+        
         st.markdown(f"""
         <div class="link-box">
-            <strong>📎 {stage_num}차 설문 링크</strong><br>
+            <strong>🔎 {stage_label} 링크</strong><br>
             <a href="{safe_link}" target="_blank">{safe_link}</a>
         </div>
         """, unsafe_allow_html=True)
@@ -1222,7 +1243,7 @@ def main():
             <h1>📊 유아플랜 컨설턴트 대시보드</h1>
         </div>
         <div class="version">
-            <div>v3.8.1</div>
+            <div>v3.8.2</div>
             <div style="font-size: 11px; opacity: 0.7;">{safe_html(current_time)}</div>
         </div>
     </div>
@@ -1260,7 +1281,7 @@ def main():
     with st.expander("📋 1차 설문 링크 (신규 고객용)", expanded=False):
         st.markdown(f"""
         <div class="link-box">
-            <strong>📎 신규 고객 1차 설문</strong><br>
+            <strong>🔎 신규 고객 1차 설문</strong><br>
             <a href="{safe_html(FIRST_SURVEY_URL)}" target="_blank">{safe_html(FIRST_SURVEY_URL)}</a>
         </div>
         """, unsafe_allow_html=True)
@@ -1328,6 +1349,7 @@ def main():
             comm_logs = data.get("comm_logs", [])
             
             customer_name = stage1.get("name", "-") if stage1 else "-"
+            customer_phone = stage1.get("phone", "-") if stage1 else "-"
             
             st.markdown("---")
             
@@ -1343,7 +1365,8 @@ def main():
             render_summary_cards(data)
             
             st.markdown("---")
-            render_link_issue_section(receipt_no, customer_name)
+            # [v3.8.2] 1차 설문 링크를 위해 phone도 전달
+            render_link_issue_section(receipt_no, customer_name, customer_phone)
             
             with st.expander("📝 상세 데이터 (1차/2차/3차)", expanded=False):
                 render_stage_card("1️⃣ 1차 설문", stage1, 1)
