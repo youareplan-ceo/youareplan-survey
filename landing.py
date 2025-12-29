@@ -28,12 +28,17 @@ META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 CURRENT_URL = "https://youareplan-landing.onrender.com"
 
 # ==============================
-# 환경 설정
+# [환경 설정] 주소 및 토큰
 # ==============================
 BRAND_NAME = "유아플랜"
 LOGO_URL = "https://raw.githubusercontent.com/youareplan-ceo/youareplan-survey/main/logo_white.png"
-APPS_SCRIPT_URL = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
 API_TOKEN = os.getenv("API_TOKEN", "youareplan")
+
+# [1] 기존 광고 DB 주소 (변경 금지 / 안전장치 - 이전 주소 유지)
+GAS_URL_OLD = os.getenv("FIRST_GAS_URL", "https://script.google.com/macros/s/AKfycbwb4rHgQepBGE4wwS-YIap8uY_4IUxGPLRhTQ960ITUA6KgfiWVZL91SOOMrdxpQ-WC/exec")
+
+# [2] 신규 CRM 주소 (회장님이 방금 주신 주소 적용 완료!)
+GAS_URL_CRM = "https://script.google.com/macros/s/AKfycbwLnuz2W5QqcgBE-t-daKseiaRm3QQtT5c2l-ch8UPR5YzeOvenT-hiy4y8wQY4KhhF/exec"
 
 # ==============================
 # [추가] UTM 파라미터 읽기
@@ -52,10 +57,6 @@ def get_utm_params():
 # [기능 1] 클라이언트 사이드 픽셀 (iframe 방식)
 # ==============================
 def inject_facebook_pixel(event_name="PageView", custom_data=None, event_id=None):
-    """
-    Streamlit Components를 사용하여 샌드박스(iframe) 내에서 픽셀 스크립트를 실행합니다.
-    """
-    
     if event_id is None:
         event_id = str(uuid.uuid4())
     
@@ -88,17 +89,12 @@ def inject_facebook_pixel(event_name="PageView", custom_data=None, event_id=None
     </html>
     """
     components.html(pixel_code, height=0, width=0)
-    
     return event_id
 
 # ==============================
 # [기능 2] 서버 사이드 API (CAPI)
 # ==============================
 def send_meta_event(event_name, user_data=None, event_id=None):
-    """
-    Meta Conversions API (서버 사이드 전송)
-    업데이트: 전화번호(ph) 뿐만 아니라 이름(fn)도 해싱하여 전송
-    """
     if not META_ACCESS_TOKEN:
         return None
     
@@ -109,19 +105,13 @@ def send_meta_event(event_name, user_data=None, event_id=None):
     
     hashed_user_data = {}
     if user_data:
-        # 1. 전화번호 해싱 (ph)
         if 'phone' in user_data:
             raw_phone = re.sub(r"[^0-9]", "", str(user_data['phone']))
             if raw_phone:
-                if raw_phone.startswith('0'):
-                    clean_phone = '82' + raw_phone[1:]
-                else:
-                    clean_phone = '82' + raw_phone
+                clean_phone = ('82' + raw_phone[1:]) if raw_phone.startswith('0') else ('82' + raw_phone)
                 hashed_user_data['ph'] = hashlib.sha256(clean_phone.encode('utf-8')).hexdigest()
         
-        # 2. [추가됨] 이름 해싱 (fn) - 매칭 품질 향상용
         if 'name' in user_data:
-            # 공백 제거 및 소문자 변환 (Meta 권장 규격)
             raw_name = str(user_data['name']).strip().lower()
             if raw_name:
                 hashed_user_data['fn'] = hashlib.sha256(raw_name.encode('utf-8')).hexdigest()
@@ -157,18 +147,35 @@ def format_phone(d: str) -> str:
     return d
 
 def save_to_sheet(data: dict) -> dict:
+    """
+    [핵심 수정] 양방향 전송 로직
+    1. 기존 시트(Old)에 전송 (필수 - 데이터 백업용)
+    2. CRM 시트(New)에 전송 (선택 - CRM/알림용)
+    """
+    data['token'] = API_TOKEN
+    
+    # 1. [필수] 기존 시트 전송
     try:
-        data['token'] = API_TOKEN
-        resp = requests.post(APPS_SCRIPT_URL, json=data, timeout=20)
-        return resp.json() if resp.status_code == 200 else {"status": "error"}
+        resp_old = requests.post(GAS_URL_OLD, json=data, timeout=10)
+        # 기존 시트가 실패하면 에러 리턴 (안전장치)
+        if resp_old.status_code != 200:
+            return {"status": "error", "message": "Old Sheet Error"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+    # 2. [선택] 신규 CRM 시트 전송 (여기가 방금 주신 주소로 쏩니다)
+    try:
+        requests.post(GAS_URL_CRM, json=data, timeout=5)
+    except Exception:
+        pass # CRM 에러는 무시 (사용자 화면엔 성공으로 표시)
+
+    # 3. 최종 성공 반환
+    return resp_old.json()
 
 # ==============================
 # 메인 함수
 # ==============================
 def main():
-    # CSS 스타일
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
@@ -176,16 +183,13 @@ def main():
     .block-container { padding-top: 1rem !important; padding-bottom: 3rem !important; padding-left: 1rem !important; padding-right: 1rem !important; max-width: 600px !important; }
     #MainMenu, footer, header { display: none !important; }
     
-    /* 히어로 섹션 */
     .hero-box { background: linear-gradient(135deg, #002855 0%, #003d7a 100%); padding: 40px 20px; text-align: center; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
     .hero-title { font-size: 26px; font-weight: 900; margin-bottom: 8px; color: white; }
     .hero-subtitle { color: #FFD700; font-size: 22px; font-weight: 700; margin-bottom: 15px; }
     .hero-desc { color: rgba(255,255,255,0.9); font-size: 15px; line-height: 1.5; }
 
-    /* 신뢰 섹션 */
     .trust-box { background: rgba(128, 128, 128, 0.1); padding: 15px; text-align: center; border-radius: 12px; margin-bottom: 30px; font-size: 14px; font-weight: 500; backdrop-filter: blur(5px); border: 1px solid rgba(128, 128, 128, 0.2); }
     
-    /* 입력창 & 버튼 */
     .stTextInput input { border-radius: 10px; }
     .stSelectbox div[data-baseweb="select"] > div { border-radius: 10px; }
     div[data-testid="stFormSubmitButton"] button { background: #002855 !important; color: white !important; border: none !important; width: 100%; padding: 16px; font-size: 18px; font-weight: bold; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.2s; margin-top: 10px; }
@@ -201,7 +205,6 @@ def main():
     </style>
     """, unsafe_allow_html=True)
     
-    # 히어로 섹션
     st.markdown(f"""
     <div class="hero-box">
         <div style="display: flex; justify-content: center; margin-bottom: 15px;">
@@ -221,40 +224,31 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 상태 초기화
     if 'form_submitted' not in st.session_state:
         st.session_state.form_submitted = False
     
-    # UTM 파라미터 저장 (페이지 로드 시 1회)
     if 'utm_params' not in st.session_state:
         st.session_state.utm_params = get_utm_params()
 
-    # PageView 이벤트 (중복 방지)
     if not st.session_state.get('page_view_fired'):
         if not st.session_state.form_submitted:
             inject_facebook_pixel("PageView")
             st.session_state.page_view_fired = True
     
-    # [화면 1] 완료 화면 (제출 성공 시)
+    # [화면 1] 완료 화면
     if st.session_state.form_submitted:
-        
-        # Lead 이벤트 전송
         if not st.session_state.get('lead_pixel_fired', False):
             event_id = str(uuid.uuid4())
-            
-            # 1. 브라우저 픽셀 (화면에는 안보임)
             inject_facebook_pixel("Lead", event_id=event_id)
             
-            # 2. 서버 사이드 API (CAPI) 전송 - 이름과 전화번호 모두 전송하도록 수정됨
             user_phone = st.session_state.get('submitted_phone', '')
-            user_name = st.session_state.get('submitted_name', '') # 저장해둔 이름 가져오기
+            user_name = st.session_state.get('submitted_name', '')
             
             capi_data = {}
             if user_phone: capi_data['phone'] = user_phone
             if user_name: capi_data['name'] = user_name
             
             send_meta_event("Lead", capi_data, event_id=event_id)
-                
             st.session_state.lead_pixel_fired = True
             
         st.success("✅ 신청이 정상적으로 접수되었습니다!")
@@ -272,10 +266,9 @@ def main():
             st.session_state.lead_pixel_fired = False
             st.session_state.page_view_fired = False
             st.session_state.submitted_phone = ''
-            st.session_state.submitted_name = '' # 이름 초기화
+            st.session_state.submitted_name = ''
             st.rerun()
 
-        # 푸터 (완료 화면)
         st.markdown("""
         <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 11px;">
             <strong>유아플랜</strong><br>
@@ -283,11 +276,9 @@ def main():
             모든 정보는 암호화되어 안전하게 처리됩니다.
         </div>
         """, unsafe_allow_html=True)
-        
-        # 완료 화면에서 실행 종료
         st.stop()
 
-    # [화면 2] 입력 폼 (기본 화면)
+    # [화면 2] 입력 폼
     with st.form("quick_form"):
         st.markdown("### 📋 간편 상담 신청")
         st.caption("30초면 신청이 완료됩니다.")
@@ -318,7 +309,6 @@ def main():
                 receipt_no = f"YP{datetime.now().strftime('%m%d')}{random.randint(1000,9999)}"
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # UTM 파라미터 가져오기
                 utm = st.session_state.utm_params
                 
                 data = {
@@ -329,7 +319,6 @@ def main():
                     'receipt_no': receipt_no,
                     'timestamp': timestamp,
                     'source': 'landing_page_mobile',
-                    # UTM 파라미터 추가
                     'utm_source': utm['utm_source'],
                     'utm_campaign': utm['utm_campaign'],
                     'utm_content': utm['utm_content'],
@@ -342,11 +331,10 @@ def main():
                 st.session_state.form_submitted = True
                 st.session_state.last_receipt_no = receipt_no
                 st.session_state.submitted_phone = phone_digits
-                st.session_state.submitted_name = name # 이름도 세션에 저장
+                st.session_state.submitted_name = name
                 st.session_state.lead_pixel_fired = False 
                 st.rerun()
 
-    # 푸터 (폼 화면)
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 11px;">
         <strong>유아플랜</strong><br>
